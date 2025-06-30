@@ -39,7 +39,6 @@ export interface MapImageOverlay extends MapObject {
   corners?: [number, number][];
   opacity?: number;
   visible?: boolean;
-  rotation?: number; // Rotation in degrees (0-360)
 }
 
 // Settings for drawing new objects on a layer
