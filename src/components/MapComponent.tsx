@@ -176,6 +176,7 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({ overlay, 
   };
 
   const handleRotationChange = (rotation: number) => {
+    console.log('Rotating overlay:', overlay.id, 'to:', rotation);
     onUpdateLayer(layerId, {
       imageOverlays: imageOverlays.map(o => o.id === overlay.id ? { ...o, rotation } : o)
     });
@@ -187,13 +188,21 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({ overlay, 
 
   // Apply rotation to the image overlay using useEffect
   useEffect(() => {
-    // Find the image overlay element by its source URL
-    const imageElements = document.querySelectorAll(`img[src="${overlay.imageUrl}"]`);
-    imageElements.forEach((element) => {
-      const img = element as HTMLImageElement;
-      img.style.transform = `rotate(${overlay.rotation || 0}deg)`;
-      img.style.transformOrigin = 'center';
-    });
+    // Wait a bit for the image to load, then find and rotate it
+    const timer = setTimeout(() => {
+      // Find all image elements and check if they match our overlay
+      const imageElements = document.querySelectorAll('img');
+      imageElements.forEach((element) => {
+        const img = element as HTMLImageElement;
+        // Check if this image is part of our overlay by looking at the parent container
+        if (img.src === overlay.imageUrl || img.src.includes(overlay.imageUrl.split('/').pop() || '')) {
+          img.style.transform = `rotate(${overlay.rotation || 0}deg)`;
+          img.style.transformOrigin = 'center';
+        }
+      });
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, [overlay.rotation, overlay.imageUrl]);
 
   return (
