@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Tooltip, useMapEvents, useMap, Rectangle, ImageOverlay } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -150,6 +150,244 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({ overlay, 
   );
 };
 
+interface GeocodingResult {
+  display_name: string;
+  lat: string;
+  lon: string;
+}
+
+const Geocoder: React.FC<{ 
+  onLocationSelect: (lat: number, lng: number, displayName: string) => void;
+  currentMapType: 'plan' | 'satellite' | 'landscape';
+  setCurrentMapType: (type: 'plan' | 'satellite' | 'landscape') => void;
+}> = ({ onLocationSelect, currentMapType, setCurrentMapType }) => {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<GeocodingResult[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+
+  const searchLocation = async (searchQuery: string) => {
+    if (!searchQuery.trim()) {
+      setResults([]);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=5&countrycodes=ua`
+      );
+      const data = await response.json();
+      setResults(data);
+    } catch (error) {
+      console.error('Помилка пошуку:', error);
+      setResults([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setQuery(value);
+    setShowResults(true);
+    
+    if (value.length > 2) {
+      const timeoutId = setTimeout(() => searchLocation(value), 500);
+      return () => clearTimeout(timeoutId);
+    } else {
+      setResults([]);
+    }
+  };
+
+  const handleResultClick = (result: GeocodingResult) => {
+    onLocationSelect(parseFloat(result.lat), parseFloat(result.lon), result.display_name);
+    setQuery(result.display_name);
+    setShowResults(false);
+  };
+
+  const handleCloseResults = () => {
+    setShowResults(false);
+  };
+
+  // Закриття по Escape
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowResults(false);
+      }
+    };
+
+    if (showResults) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [showResults]);
+
+  return (
+    <div style={{ position: 'absolute', top: 10, left: 50, zIndex: 1000, width: 300 }}>
+      <div style={{ position: 'relative' }}>
+        <input
+          type="text"
+          value={query}
+          onChange={handleSearch}
+          onFocus={() => setShowResults(true)}
+          placeholder="Пошук місця..."
+          style={{
+            width: '100%',
+            padding: '8px 12px',
+            border: '1px solid #ccc',
+            borderRadius: 4,
+            fontSize: '14px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            boxSizing: 'border-box'
+          }}
+        />
+        {isLoading && (
+          <div style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)' }}>
+            Завантаження...
+          </div>
+        )}
+      </div>
+      
+      {/* Base map type buttons */}
+      <div style={{ 
+        marginTop: 8, 
+        display: 'flex', 
+        gap: 4,
+        background: 'white', 
+        borderRadius: 4, 
+        padding: 4, 
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        width: '100%',
+        boxSizing: 'border-box'
+      }}>
+        <button
+          onClick={() => setCurrentMapType('plan')}
+          style={{
+            padding: '4px 8px',
+            border: 'none',
+            borderRadius: 3,
+            background: currentMapType === 'plan' ? '#1976d2' : '#f0f0f0',
+            color: currentMapType === 'plan' ? 'white' : 'black',
+            cursor: 'pointer',
+            fontSize: '12px',
+            flex: 1
+          }}
+        >
+          План
+        </button>
+        <button
+          onClick={() => setCurrentMapType('satellite')}
+          style={{
+            padding: '4px 8px',
+            border: 'none',
+            borderRadius: 3,
+            background: currentMapType === 'satellite' ? '#1976d2' : '#f0f0f0',
+            color: currentMapType === 'satellite' ? 'white' : 'black',
+            cursor: 'pointer',
+            fontSize: '12px',
+            flex: 1
+          }}
+        >
+          Супутник
+        </button>
+        <button
+          onClick={() => setCurrentMapType('landscape')}
+          style={{
+            padding: '4px 8px',
+            border: 'none',
+            borderRadius: 3,
+            background: currentMapType === 'landscape' ? '#1976d2' : '#f0f0f0',
+            color: currentMapType === 'landscape' ? 'white' : 'black',
+            cursor: 'pointer',
+            fontSize: '12px',
+            flex: 1
+          }}
+        >
+          Ландшафт
+        </button>
+      </div>
+      
+      {showResults && results.length > 0 && (
+        <>
+          {/* Overlay для закриття по кліку поза попапом */}
+          <div 
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 999
+            }}
+            onClick={handleCloseResults}
+          />
+          
+          <div style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            right: 0,
+            background: 'white',
+            border: '1px solid #ccc',
+            borderRadius: 4,
+            maxHeight: 200,
+            overflowY: 'auto',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            zIndex: 1001
+          }}>
+            {/* Кнопка закриття */}
+            <div style={{
+              position: 'sticky',
+              top: 0,
+              background: 'white',
+              padding: '4px 8px',
+              borderBottom: '1px solid #eee',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <span style={{ fontSize: '12px', color: '#666' }}>Результати пошуку</span>
+              <button
+                onClick={handleCloseResults}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '16px',
+                  cursor: 'pointer',
+                  color: '#999',
+                  padding: '0 4px'
+                }}
+                title="Закрити"
+              >
+                ×
+              </button>
+            </div>
+            
+            {results.map((result, index) => (
+              <div
+                key={index}
+                onClick={() => handleResultClick(result)}
+                style={{
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  borderBottom: '1px solid #eee',
+                  fontSize: '13px'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+              >
+                {result.display_name}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 const MapComponent: React.FC<MapComponentProps> = ({ 
   layers, 
   activeLayerId, 
@@ -170,7 +408,23 @@ const MapComponent: React.FC<MapComponentProps> = ({
 }) => {
   const lvivPosition: [number, number] = [49.8397, 24.0297];
   const mapRef = useRef<L.Map | null>(null);
+  const [currentMapType, setCurrentMapType] = useState<'plan' | 'satellite' | 'landscape'>('plan');
   
+  const mapTypes = {
+    plan: {
+      url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    },
+    satellite: {
+      url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      attribution: '&copy; <a href="https://www.esri.com/">Esri</a>'
+    },
+    landscape: {
+      url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+      attribution: '&copy; <a href="https://opentopomap.org/">OpenTopoMap</a> contributors'
+    }
+  };
+
   const handleAddMarker = (latlng: L.LatLng) => {
     const activeLayer = layers.find(l => l.id === activeLayerId);
     if (!activeLayer) {
@@ -201,6 +455,27 @@ const MapComponent: React.FC<MapComponentProps> = ({
       m.id === marker.id ? { ...m, lat: newLatLng.lat, lng: newLatLng.lng } : m
     );
     onUpdateLayer(layer.id, { markers: updatedMarkers });
+  };
+
+  const handleLocationSelect = (lat: number, lng: number, displayName: string) => {
+    if (mapRef.current) {
+      mapRef.current.setView([lat, lng], 15);
+      
+      // Додаємо маркер до активного шару
+      const activeLayer = layers.find(l => l.id === activeLayerId);
+      if (activeLayer) {
+        const newMarker: MapMarker = {
+          id: `search-marker-${Date.now()}`,
+          lat: lat,
+          lng: lng,
+          title: displayName,
+          color: activeLayer.drawingSettings.markerColor,
+        };
+        onUpdateLayer(activeLayerId, {
+          markers: [...activeLayer.markers, newMarker]
+        });
+      }
+    }
   };
 
   useEffect(() => {
@@ -237,10 +512,17 @@ const MapComponent: React.FC<MapComponentProps> = ({
   }, [layers]);
 
   return (
-    <MapContainer center={lvivPosition} zoom={13} style={{ flexGrow: 1 }}>
+    <MapContainer center={lvivPosition} zoom={13} style={{ flexGrow: 1 }} ref={mapRef}>
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution={mapTypes[currentMapType].attribution}
+        url={mapTypes[currentMapType].url}
+      />
+      
+      {/* Geocoder search */}
+      <Geocoder 
+        onLocationSelect={handleLocationSelect}
+        currentMapType={currentMapType}
+        setCurrentMapType={setCurrentMapType}
       />
       
       <MapEventsHandler 
