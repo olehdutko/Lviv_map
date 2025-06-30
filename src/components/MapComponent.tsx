@@ -165,6 +165,9 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({ overlay, 
     [Math.max(...overlay.corners.map(c => c[0])), Math.max(...overlay.corners.map(c => c[1]))],
   ];
 
+  // Create a unique ID for this overlay
+  const overlayId = `overlay-${overlay.id}`;
+
   const handleDrag = (index: number, e: L.LeafletEvent) => {
     const marker = e.target as L.Marker;
     const newPos: [number, number] = [marker.getLatLng().lat, marker.getLatLng().lng];
@@ -190,20 +193,52 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({ overlay, 
   useEffect(() => {
     // Wait a bit for the image to load, then find and rotate it
     const timer = setTimeout(() => {
-      // Find all image elements and check if they match our overlay
+      // Try multiple approaches to find the image
+      let found = false;
+      
+      // Approach 1: Look for images with matching src
       const imageElements = document.querySelectorAll('img');
-      imageElements.forEach((element) => {
+      console.log('Found', imageElements.length, 'image elements');
+      
+      imageElements.forEach((element, index) => {
         const img = element as HTMLImageElement;
-        // Check if this image is part of our overlay by looking at the parent container
+        console.log(`Image ${index}:`, img.src);
+        
+        // Check if this image is part of our overlay
         if (img.src === overlay.imageUrl || img.src.includes(overlay.imageUrl.split('/').pop() || '')) {
+          console.log('Applying rotation to image:', img.src, 'rotation:', overlay.rotation || 0);
           img.style.transform = `rotate(${overlay.rotation || 0}deg)`;
           img.style.transformOrigin = 'center';
+          found = true;
         }
       });
-    }, 100);
+      
+      // Approach 2: If not found, try to find by looking at Leaflet's overlay containers
+      if (!found) {
+        const leafletOverlays = document.querySelectorAll('.leaflet-image-layer');
+        console.log('Found', leafletOverlays.length, 'Leaflet image layers');
+        
+        leafletOverlays.forEach((layer, index) => {
+          const img = layer.querySelector('img');
+          if (img) {
+            console.log(`Leaflet layer ${index} image:`, img.src);
+            if (img.src === overlay.imageUrl || img.src.includes(overlay.imageUrl.split('/').pop() || '')) {
+              console.log('Applying rotation to Leaflet layer image:', img.src, 'rotation:', overlay.rotation || 0);
+              img.style.transform = `rotate(${overlay.rotation || 0}deg)`;
+              img.style.transformOrigin = 'center';
+              found = true;
+            }
+          }
+        });
+      }
+      
+      if (!found) {
+        console.log('Could not find image for overlay:', overlay.id, 'URL:', overlay.imageUrl);
+      }
+    }, 1000); // Increased delay to ensure image is loaded
 
     return () => clearTimeout(timer);
-  }, [overlay.rotation, overlay.imageUrl]);
+  }, [overlay.rotation, overlay.imageUrl, overlay.id]);
 
   return (
     <>
