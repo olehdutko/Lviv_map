@@ -670,3 +670,11 @@ h1 {
 .dialog-actions button:not(:disabled):hover {
   background: #1256a3;
 }
+
+body.osr-crosshair {
+  cursor: crosshair !important;
+}
+
+.osr-crosshair .leaflet-container {
+  cursor: crosshair !important;
+}

@@ -36,8 +36,9 @@ export interface MapPolyline extends MapObject {
 
 export interface MapImageOverlay extends MapObject {
   imageUrl: string; // Base64 string
-  bounds: [[number, number], [number, number]]; // [[lat1, lng1], [lat2, lng2]]
+  corners?: [number, number][];
   opacity?: number;
+  visible?: boolean;
 }
 
 // Settings for drawing new objects on a layer

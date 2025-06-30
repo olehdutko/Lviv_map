@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import MapComponent from './components/MapComponent';
 import LayerPanel from './components/LayerPanel';
 import ObjectEditor from './components/ObjectEditor';
@@ -50,6 +50,18 @@ function App() {
   const [imageOverlayCorners, setImageOverlayCorners] = useState<[number, number][]>([]);
 
   const presetColors = ['#ff4500', '#ff8c00', '#ffd700', '#90ee90', '#00ced1', '#1e90ff', '#c71585', '#333333'];
+
+  // crosshair cursor when selecting overlay corners
+  useEffect(() => {
+    if (pendingImageOverlay) {
+      document.body.classList.add('osr-crosshair');
+    } else {
+      document.body.classList.remove('osr-crosshair');
+    }
+    return () => {
+      document.body.classList.remove('osr-crosshair');
+    };
+  }, [pendingImageOverlay]);
 
   const handleAddLayer = () => {
     const newLayer = createNewLayer();
@@ -273,25 +285,23 @@ function App() {
 
   const handleMapClickForImageOverlay = (latlng: [number, number]) => {
     if (!pendingImageOverlay) return;
-    if (imageOverlayCorners.length < 1) {
-      setImageOverlayCorners([latlng]);
-    } else if (imageOverlayCorners.length === 1) {
-      const corners = [imageOverlayCorners[0], latlng];
-      setImageOverlayCorners(corners);
-      // Додаємо imageOverlay у активний шар
+    if (imageOverlayCorners.length < 3) {
+      setImageOverlayCorners(prev => [...prev, latlng]);
+    } else if (imageOverlayCorners.length === 3) {
+      const corners = [...imageOverlayCorners, latlng];
+      setImageOverlayCorners([]);
       if (activeLayer) {
         const newOverlay = {
           id: `image-overlay-${Date.now()}`,
           title: 'Мапа',
           imageUrl: pendingImageOverlay,
-          bounds: corners as [[number, number], [number, number]],
+          corners,
         };
         handleUpdateLayer(activeLayerId, {
           imageOverlays: [...(activeLayer.imageOverlays || []), newOverlay],
         });
       }
       setPendingImageOverlay(null);
-      setImageOverlayCorners([]);
     }
   };
 
@@ -448,8 +458,10 @@ function App() {
           )}
           {pendingImageOverlay && (
             <div className="image-overlay-hint">
-              {imageOverlayCorners.length === 0 && 'Клікніть на карті верхній лівий кут зображення'}
-              {imageOverlayCorners.length === 1 && 'Клікніть на карті нижній правий кут зображення'}
+              {imageOverlayCorners.length === 0 && 'Клікніть на мапі перший кут зображення'}
+              {imageOverlayCorners.length === 1 && 'Клікніть на мапі другий кут зображення'}
+              {imageOverlayCorners.length === 2 && 'Клікніть на мапі третій кут зображення'}
+              {imageOverlayCorners.length === 3 && 'Клікніть на мапі четвертий кут зображення'}
             </div>
           )}
           {/* Діалог додавання мапи (зображення) */}
