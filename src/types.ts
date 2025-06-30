@@ -3,7 +3,6 @@
  */
 
 // We will add types for Layers, Markers, Polygons, etc., here.
-export {};
 
 // Base type for any object on the map
 export interface MapObject {
@@ -31,6 +30,8 @@ export interface MapPolyline extends MapObject {
   coordinates: [number, number][];
   color?: string;
   weight?: number;
+  dashArray?: string; // for line style: solid, dashed, dotted
+  imageUrl?: string;
 }
 
 // Settings for drawing new objects on a layer
@@ -40,6 +41,7 @@ export interface DrawingSettings {
   polygonFillColor: string;
   polylineColor: string;
   polylineWeight: number;
+  polylineDashArray: string;
 }
 
 // The main Layer type

@@ -10,6 +10,7 @@ interface LayerPanelProps {
   onSetActiveLayer: (layerId: string) => void;
   onExport: () => void;
   onImport: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  className?: string;
 }
 
 const LayerPanel: React.FC<LayerPanelProps> = ({
@@ -21,9 +22,10 @@ const LayerPanel: React.FC<LayerPanelProps> = ({
   onSetActiveLayer,
   onExport,
   onImport,
+  className,
 }) => {
   return (
-    <div className="layer-panel">
+    <div className={`layer-panel ${className || ''}`}>
       <h2>Шари</h2>
       <div className="panel-controls">
         <button onClick={onAddLayer}>Додати шар</button>
@@ -37,7 +39,7 @@ const LayerPanel: React.FC<LayerPanelProps> = ({
         {layers.map(layer => (
           <div
             key={layer.id}
-            className={`layer-item ${layer.id === activeLayerId ? 'active' : ''}`}
+            className={`layer-item ${layer.id === activeLayerId ? 'active' : ''} ${!layer.visible ? 'layer-hidden' : ''}`}
             onClick={() => onSetActiveLayer(layer.id)}
           >
             <input
@@ -46,12 +48,25 @@ const LayerPanel: React.FC<LayerPanelProps> = ({
               onChange={(e) => onUpdateLayer(layer.id, { name: e.target.value })}
               onClick={(e) => e.stopPropagation()}
             />
-            <input
-              type="checkbox"
-              checked={layer.visible}
-              onChange={(e) => onUpdateLayer(layer.id, { visible: e.target.checked })}
-              onClick={(e) => e.stopPropagation()}
-            />
+            <div className="layer-item-controls">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUpdateLayer(layer.id, { visible: !layer.visible });
+                }}
+              >
+                {layer.visible ? 'Приховати' : 'Показати'}
+              </button>
+              <button
+                className="delete-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteLayer(layer.id);
+                }}
+              >
+                Видалити
+              </button>
+            </div>
             <input
               type="range"
               min="0"
@@ -61,15 +76,6 @@ const LayerPanel: React.FC<LayerPanelProps> = ({
               onChange={(e) => onUpdateLayer(layer.id, { opacity: parseFloat(e.target.value) })}
               onClick={(e) => e.stopPropagation()}
             />
-            <button
-              className="delete-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDeleteLayer(layer.id);
-              }}
-            >
-              ×
-            </button>
           </div>
         ))}
       </div>

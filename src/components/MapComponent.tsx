@@ -2,8 +2,10 @@ import React, { useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Tooltip, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Layer, MapMarker } from '../types';
+import { Layer, MapMarker, MapPolyline } from '../types';
 import MarkersLayer from './MarkersLayer';
+import PolylinesLayer from './PolylinesLayer';
+import DrawingVerticesLayer from './DrawingVerticesLayer';
 
 // Fix for default marker icon
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -29,21 +31,46 @@ interface MapComponentProps {
   onUpdateLayer: (layerId: string, updates: Partial<Layer>) => void;
   drawingMode: 'marker' | 'polygon' | 'polyline' | 'none';
   onSetSelectedObject: (object: MapMarker | null) => void;
+  currentPolylinePoints: [number, number][];
+  onAddPolylinePoint: (point: [number, number]) => void;
+  onDeletePolyline: (layerId: string, polylineId: string) => void;
+  onEditPolyline: (polyline: MapPolyline, layerId: string) => void;
+  onDeletePolylinePoint: (index: number) => void;
+  selectedPolyline: MapPolyline | null;
+  onDeleteSelectedPolylineVertex: (index: number) => void;
+  isLayerPanelVisible: boolean;
 }
 
 // Internal component to handle map events, as it must be a child of MapContainer
 const MapEventsHandler: React.FC<{
   drawingMode: 'marker' | 'polygon' | 'polyline' | 'none';
   onMarkerAdd: (latlng: L.LatLng) => void;
-}> = ({ drawingMode, onMarkerAdd }) => {
+  onPolylinePointAdd: (latlng: L.LatLng) => void;
+}> = ({ drawingMode, onMarkerAdd, onPolylinePointAdd }) => {
   useMapEvents({
     click(e) {
       if (drawingMode === 'marker') {
         onMarkerAdd(e.latlng);
+      } else if (drawingMode === 'polyline') {
+        onPolylinePointAdd(e.latlng);
       }
     },
   });
   return null; // This component does not render anything
+};
+
+const MapResizer: React.FC<{ isPanelVisible: boolean }> = ({ isPanelVisible }) => {
+  const map = useMap();
+  useEffect(() => {
+    // We wait 300ms to match the CSS transition duration of the panel
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [isPanelVisible, map]);
+
+  return null;
 };
 
 const CompassControl = () => {
@@ -74,7 +101,15 @@ const MapComponent: React.FC<MapComponentProps> = ({
   activeLayerId, 
   onUpdateLayer,
   drawingMode,
-  onSetSelectedObject
+  onSetSelectedObject,
+  currentPolylinePoints,
+  onAddPolylinePoint,
+  onDeletePolyline,
+  onEditPolyline,
+  onDeletePolylinePoint,
+  selectedPolyline,
+  onDeleteSelectedPolylineVertex,
+  isLayerPanelVisible,
 }) => {
   const lvivPosition: [number, number] = [49.8397, 24.0297];
   
@@ -96,6 +131,10 @@ const MapComponent: React.FC<MapComponentProps> = ({
     });
   };
 
+  const handleAddPolylinePoint = (latlng: L.LatLng) => {
+    onAddPolylinePoint([latlng.lat, latlng.lng]);
+  };
+
   const handleMarkerDrag = (marker: MapMarker, newLatLng: L.LatLng) => {
     const layer = layers.find(l => l.markers.some(m => m.id === marker.id));
     if (!layer) return;
@@ -113,8 +152,13 @@ const MapComponent: React.FC<MapComponentProps> = ({
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       
-      <MapEventsHandler drawingMode={drawingMode} onMarkerAdd={handleAddMarker} />
+      <MapEventsHandler 
+        drawingMode={drawingMode} 
+        onMarkerAdd={handleAddMarker}
+        onPolylinePointAdd={handleAddPolylinePoint} 
+      />
       <CompassControl />
+      <MapResizer isPanelVisible={isLayerPanelVisible} />
 
       <MarkersLayer
         layers={layers}
@@ -122,8 +166,26 @@ const MapComponent: React.FC<MapComponentProps> = ({
         onUpdateLayer={onUpdateLayer}
         onSetSelectedObject={onSetSelectedObject}
       />
+      
+      <PolylinesLayer
+        layers={layers}
+        currentPolylinePoints={currentPolylinePoints}
+        onDeletePolyline={onDeletePolyline}
+        onEditPolyline={onEditPolyline}
+        selectedPolyline={selectedPolyline}
+      />
 
-      {/* polygons and polylines layers will go here in the future */}
+      <DrawingVerticesLayer
+        points={currentPolylinePoints}
+        onDeletePoint={onDeletePolylinePoint}
+      />
+
+      {selectedPolyline && (
+        <DrawingVerticesLayer
+          points={selectedPolyline.coordinates}
+          onDeletePoint={onDeleteSelectedPolylineVertex}
+        />
+      )}
     </MapContainer>
   );
 };
