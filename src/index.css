@@ -1,0 +1,450 @@
+/* General Styles */
+:root {
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  
+  --bg-primary: #ffffff;
+  --bg-secondary: #f3f4f6;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --border-color: #d1d5db;
+  --accent-color: #3b82f6;
+  --accent-color-hover: #2563eb;
+  --danger-color: #ef4444;
+  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+[data-theme='dark'] {
+  --bg-primary: #111827;
+  --bg-secondary: #1f2937;
+  --text-primary: #f9fafb;
+  --text-secondary: #9ca3af;
+  --border-color: #374151;
+  --accent-color: #60a5fa;
+  --accent-color-hover: #3b82f6;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.2s, color 0.2s;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* App container */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+h1 {
+  text-align: center;
+  margin: 1rem 0;
+  color: var(--text-primary);
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+/* Leaflet styles override */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  background-color: var(--bg-secondary) !important;
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  box-shadow: var(--shadow);
+}
+
+/* LayerPanel Styles */
+.layer-panel {
+  width: 300px;
+  min-width: 250px;
+  background-color: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.layer-panel h2 {
+  margin-top: 0;
+  text-align: center;
+}
+
+.panel-controls {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.panel-controls button, .panel-controls label {
+  flex-grow: 1;
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+.panel-controls button:hover, .panel-controls label:hover {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.layer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.layer-item {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.layer-item.active {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 5px var(--accent-color);
+}
+
+.layer-item input[type="text"] {
+  width: calc(100% - 20px);
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.layer-item input[type="range"] {
+  width: 100%;
+}
+
+.layer-item .delete-btn {
+  float: right;
+  border: none;
+  background: transparent;
+  color: var(--danger-color);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+/* Drawing Toolbar */
+.drawing-toolbar {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background-color: var(--bg-primary);
+  border-radius: 4px;
+  padding: 5px;
+  box-shadow: var(--shadow);
+  display: flex;
+  gap: 5px;
+}
+
+.drawing-toolbar button {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.drawing-toolbar button.active {
+  background-color: var(--accent-color);
+  color: white;
+  border-color: var(--accent-color);
+}
+
+/* Object Editor Panel */
+.object-editor {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+  width: 280px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: var(--shadow);
+}
+
+.object-editor h4 {
+  margin-top: 0;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.editor-field {
+  margin-bottom: 0.75rem;
+}
+
+.editor-field label {
+  display: block;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.25rem;
+}
+
+.editor-field input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.editor-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1rem;
+}
+
+.editor-actions button {
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--accent-color);
+  background-color: var(--accent-color);
+  color: white;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.editor-actions button:hover {
+  transform: scale(1.05);
+}
+
+.editor-actions button:active {
+  transform: scale(0.95);
+}
+
+.editor-actions button.delete-btn {
+  background-color: var(--danger-color);
+  border-color: var(--danger-color);
+}
+
+.editor-actions button.close-btn {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+.editor-field textarea {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+}
+
+.icon-search-container {
+  position: relative;
+}
+
+.icon-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1001; /* Should be higher than other elements */
+  box-shadow: var(--shadow);
+}
+
+.icon-suggestions li {
+  padding: 0.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.icon-suggestions li:hover {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+/* Confirmation Dialog */
+.confirmation-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+
+.confirmation-dialog {
+  background-color: var(--bg-primary);
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  width: 300px;
+  text-align: center;
+}
+
+.confirmation-dialog p {
+  margin: 0 0 1.5rem;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.confirmation-dialog-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.confirmation-dialog-actions button {
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  font-weight: 500;
+}
+
+.confirmation-dialog-actions .confirm-btn {
+  background-color: var(--danger-color);
+  color: white;
+}
+
+.confirmation-dialog-actions .cancel-btn {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+/* Color Palette */
+.color-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.color-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.1s;
+}
+
+.color-swatch:hover {
+  transform: scale(1.1);
+}
+
+.color-swatch.selected {
+  border-color: var(--accent-color);
+}
+
+.color-picker-input {
+  width: 32px !important; /* Override general input styles */
+  height: 32px;
+  padding: 2px !important; /* Override general input styles */
+  border: none !important;
+  background-color: transparent !important;
+  cursor: pointer;
+}
+
+/* Image Uploader */
+.image-uploader {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.image-upload-label {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.image-upload-label:hover {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.image-preview-container {
+  position: relative;
+  max-width: 100%;
+}
+
+.image-preview {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+
+.remove-image-btn {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background-color: var(--danger-color);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  font-size: 1rem;
+  line-height: 24px;
+  text-align: center;
+  cursor: pointer;
+}
+
+/* Tooltip Content */
+.tooltip-content .tooltip-image {
+  max-width: 150px;
+  height: auto;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+} 
