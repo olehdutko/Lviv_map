@@ -52,11 +52,6 @@ const MapEventsHandler: React.FC<{
   imageOverlayMode: boolean;
   onMapClickForImageOverlay: (latlng: [number, number]) => void;
 }> = ({ drawingMode, onMarkerAdd, onPolylinePointAdd, imageOverlayMode, onMapClickForImageOverlay }) => {
-  const map = useMap();
-  const [isRotating, setIsRotating] = useState(false);
-  const [lastMousePos, setLastMousePos] = useState<{ x: number; y: number } | null>(null);
-  const [currentRotation, setCurrentRotation] = useState(0);
-
   useMapEvents({
     click(e) {
       if (imageOverlayMode) {
@@ -67,57 +62,12 @@ const MapEventsHandler: React.FC<{
         onPolylinePointAdd(e.latlng);
       }
     },
-    mousedown(e) {
-      // Right click + drag for rotation
-      if (e.originalEvent.button === 2) {
-        setIsRotating(true);
-        setLastMousePos({ x: e.originalEvent.clientX, y: e.originalEvent.clientY });
-        e.originalEvent.preventDefault();
-      }
-    },
-    mousemove(e) {
-      if (isRotating && lastMousePos) {
-        const deltaX = e.originalEvent.clientX - lastMousePos.x;
-        const newRotation = currentRotation + (deltaX * 0.5); // Sensitivity factor
-        
-        // Apply rotation to the map container
-        const mapContainer = map.getContainer();
-        mapContainer.style.transform = `rotate(${newRotation}deg)`;
-        setCurrentRotation(newRotation);
-        
-        setLastMousePos({ x: e.originalEvent.clientX, y: e.originalEvent.clientY });
-      }
-    },
-    mouseup(e) {
-      setIsRotating(false);
-      setLastMousePos(null);
-    },
-    contextmenu(e) {
-      // Prevent default context menu for right-click rotation
-      e.originalEvent.preventDefault();
-    }
   });
-
-  // Add CSS for cursor changes
-  useEffect(() => {
-    const mapContainer = map.getContainer();
-    
-    if (isRotating) {
-      mapContainer.style.cursor = 'crosshair';
-    } else {
-      mapContainer.style.cursor = 'grab';
-    }
-
-    return () => {
-      mapContainer.style.cursor = 'grab';
-    };
-  }, [isRotating, map]);
-
   return null; // This component does not render anything
 };
 
-// Map rotation help component
-const MapRotationHelp: React.FC = () => {
+// Image overlay rotation help component
+const ImageOverlayRotationHelp: React.FC = () => {
   const [showHelp, setShowHelp] = useState(false);
 
   return (
@@ -139,7 +89,7 @@ const MapRotationHelp: React.FC = () => {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span>🔄</span>
-        <span>Обертання карти</span>
+        <span>Обертання доданих карт</span>
       </div>
       
       {showHelp && (
@@ -154,8 +104,8 @@ const MapRotationHelp: React.FC = () => {
           whiteSpace: 'nowrap',
           fontSize: '11px'
         }}>
-          <div>🖱️ Права кнопка + перетягування: Обертання карти</div>
-          <div>🔄 Обертайте карту в будь-якому напрямку</div>
+          <div>🖱️ Клікніть на 🔄 кнопку та перетягуйте для обертання</div>
+          <div>🔄 Обертайте додані карти в будь-якому напрямку</div>
         </div>
       )}
     </div>
@@ -225,7 +175,26 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({ overlay, 
     });
   };
 
+  const handleRotationChange = (rotation: number) => {
+    onUpdateLayer(layerId, {
+      imageOverlays: imageOverlays.map(o => o.id === overlay.id ? { ...o, rotation } : o)
+    });
+  };
 
+  // Calculate center point for rotation
+  const centerLat = (bounds[0][0] + bounds[1][0]) / 2;
+  const centerLng = (bounds[0][1] + bounds[1][1]) / 2;
+
+  // Apply rotation to the image overlay using useEffect
+  useEffect(() => {
+    // Find the image overlay element by its source URL
+    const imageElements = document.querySelectorAll(`img[src="${overlay.imageUrl}"]`);
+    imageElements.forEach((element) => {
+      const img = element as HTMLImageElement;
+      img.style.transform = `rotate(${overlay.rotation || 0}deg)`;
+      img.style.transformOrigin = 'center';
+    });
+  }, [overlay.rotation, overlay.imageUrl]);
 
   return (
     <>
@@ -233,6 +202,56 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({ overlay, 
         url={overlay.imageUrl}
         bounds={bounds}
         opacity={typeof overlay.opacity === 'number' ? overlay.opacity : 1}
+      />
+      
+      {/* Manual rotation control marker */}
+      <Marker
+        position={[centerLat, centerLng]}
+        draggable={false}
+        icon={L.divIcon({
+          className: 'rotation-control',
+          html: `
+            <div style="
+              width: 30px; 
+              height: 30px; 
+              background: #1976d2; 
+              border: 2px solid white; 
+              border-radius: 50%; 
+              display: flex; 
+              align-items: center; 
+              justify-content: center; 
+              cursor: pointer;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+              color: white;
+              font-size: 16px;
+              font-weight: bold;
+            ">
+              🔄
+            </div>
+          `,
+          iconSize: [30, 30],
+          iconAnchor: [15, 15]
+        })}
+        eventHandlers={{
+          mousedown: (e) => {
+            const startX = e.originalEvent.clientX;
+            const startRotation = overlay.rotation || 0;
+            
+            const handleMouseMove = (moveEvent: MouseEvent) => {
+              const deltaX = moveEvent.clientX - startX;
+              const newRotation = startRotation + (deltaX * 0.5); // Sensitivity factor
+              handleRotationChange(newRotation);
+            };
+            
+            const handleMouseUp = () => {
+              document.removeEventListener('mousemove', handleMouseMove);
+              document.removeEventListener('mouseup', handleMouseUp);
+            };
+            
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+          }
+        }}
       />
       
       {overlay.corners.map((corner, i) => (
@@ -688,8 +707,8 @@ const MapComponent: React.FC<MapComponentProps> = ({
           ))
       )}
       
-      {/* Map rotation help */}
-      <MapRotationHelp />
+      {/* Image overlay rotation help */}
+      <ImageOverlayRotationHelp />
     </MapContainer>
   );
 };
