@@ -129,6 +129,27 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({ overlay, 
     });
   };
 
+  const handleRotationChange = (rotation: number) => {
+    onUpdateLayer(layerId, {
+      imageOverlays: imageOverlays.map(o => o.id === overlay.id ? { ...o, rotation } : o)
+    });
+  };
+
+  // Calculate center point for rotation
+  const centerLat = (bounds[0][0] + bounds[1][0]) / 2;
+  const centerLng = (bounds[0][1] + bounds[1][1]) / 2;
+
+  // Apply rotation to the image overlay using useEffect
+  useEffect(() => {
+    // Find the image overlay element by its source URL
+    const imageElements = document.querySelectorAll(`img[src="${overlay.imageUrl}"]`);
+    imageElements.forEach((element) => {
+      const img = element as HTMLImageElement;
+      img.style.transform = `rotate(${overlay.rotation || 0}deg)`;
+      img.style.transformOrigin = 'center';
+    });
+  }, [overlay.rotation, overlay.imageUrl]);
+
   return (
     <>
       <ImageOverlay
@@ -136,6 +157,44 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({ overlay, 
         bounds={bounds}
         opacity={typeof overlay.opacity === 'number' ? overlay.opacity : 1}
       />
+      
+      {/* Rotation control marker */}
+      <Marker
+        position={[centerLat, centerLng]}
+        draggable={false}
+        icon={L.divIcon({
+          className: 'rotation-control',
+          html: `
+            <div style="
+              width: 30px; 
+              height: 30px; 
+              background: #1976d2; 
+              border: 2px solid white; 
+              border-radius: 50%; 
+              display: flex; 
+              align-items: center; 
+              justify-content: center; 
+              cursor: pointer;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+              color: white;
+              font-size: 16px;
+              font-weight: bold;
+            ">
+              ↻
+            </div>
+          `,
+          iconSize: [30, 30],
+          iconAnchor: [15, 15]
+        })}
+        eventHandlers={{
+          click: () => {
+            const currentRotation = overlay.rotation || 0;
+            const newRotation = (currentRotation + 90) % 360;
+            handleRotationChange(newRotation);
+          }
+        }}
+      />
+      
       {overlay.corners.map((corner, i) => (
         <Marker
           key={i}
