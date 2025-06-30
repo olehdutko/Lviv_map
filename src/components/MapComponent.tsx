@@ -52,6 +52,11 @@ const MapEventsHandler: React.FC<{
   imageOverlayMode: boolean;
   onMapClickForImageOverlay: (latlng: [number, number]) => void;
 }> = ({ drawingMode, onMarkerAdd, onPolylinePointAdd, imageOverlayMode, onMapClickForImageOverlay }) => {
+  const map = useMap();
+  const [isRotating, setIsRotating] = useState(false);
+  const [lastMousePos, setLastMousePos] = useState<{ x: number; y: number } | null>(null);
+  const [currentRotation, setCurrentRotation] = useState(0);
+
   useMapEvents({
     click(e) {
       if (imageOverlayMode) {
@@ -62,8 +67,99 @@ const MapEventsHandler: React.FC<{
         onPolylinePointAdd(e.latlng);
       }
     },
+    mousedown(e) {
+      // Right click + drag for rotation
+      if (e.originalEvent.button === 2) {
+        setIsRotating(true);
+        setLastMousePos({ x: e.originalEvent.clientX, y: e.originalEvent.clientY });
+        e.originalEvent.preventDefault();
+      }
+    },
+    mousemove(e) {
+      if (isRotating && lastMousePos) {
+        const deltaX = e.originalEvent.clientX - lastMousePos.x;
+        const newRotation = currentRotation + (deltaX * 0.5); // Sensitivity factor
+        
+        // Apply rotation to the map container
+        const mapContainer = map.getContainer();
+        mapContainer.style.transform = `rotate(${newRotation}deg)`;
+        setCurrentRotation(newRotation);
+        
+        setLastMousePos({ x: e.originalEvent.clientX, y: e.originalEvent.clientY });
+      }
+    },
+    mouseup(e) {
+      setIsRotating(false);
+      setLastMousePos(null);
+    },
+    contextmenu(e) {
+      // Prevent default context menu for right-click rotation
+      e.originalEvent.preventDefault();
+    }
   });
+
+  // Add CSS for cursor changes
+  useEffect(() => {
+    const mapContainer = map.getContainer();
+    
+    if (isRotating) {
+      mapContainer.style.cursor = 'crosshair';
+    } else {
+      mapContainer.style.cursor = 'grab';
+    }
+
+    return () => {
+      mapContainer.style.cursor = 'grab';
+    };
+  }, [isRotating, map]);
+
   return null; // This component does not render anything
+};
+
+// Map rotation help component
+const MapRotationHelp: React.FC = () => {
+  const [showHelp, setShowHelp] = useState(false);
+
+  return (
+    <div style={{ 
+      position: 'absolute', 
+      bottom: 10, 
+      right: 10, 
+      zIndex: 1000,
+      background: 'rgba(0,0,0,0.8)',
+      color: 'white',
+      padding: '8px 12px',
+      borderRadius: 4,
+      fontSize: '12px',
+      cursor: 'pointer',
+      userSelect: 'none'
+    }}
+    onMouseEnter={() => setShowHelp(true)}
+    onMouseLeave={() => setShowHelp(false)}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span>🔄</span>
+        <span>Обертання карти</span>
+      </div>
+      
+      {showHelp && (
+        <div style={{
+          position: 'absolute',
+          bottom: '100%',
+          right: 0,
+          background: 'rgba(0,0,0,0.9)',
+          padding: '8px 12px',
+          borderRadius: 4,
+          marginBottom: 8,
+          whiteSpace: 'nowrap',
+          fontSize: '11px'
+        }}>
+          <div>🖱️ Права кнопка + перетягування: Обертання карти</div>
+          <div>🔄 Обертайте карту в будь-якому напрямку</div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 const MapResizer: React.FC<{ isPanelVisible: boolean }> = ({ isPanelVisible }) => {
@@ -591,6 +687,9 @@ const MapComponent: React.FC<MapComponentProps> = ({
             />
           ))
       )}
+      
+      {/* Map rotation help */}
+      <MapRotationHelp />
     </MapContainer>
   );
 };
