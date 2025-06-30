@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Tooltip, useMapEvents, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Tooltip, useMapEvents, useMap, Rectangle, ImageOverlay } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Layer, MapMarker, MapPolyline } from '../types';
@@ -39,6 +39,9 @@ interface MapComponentProps {
   selectedPolyline: MapPolyline | null;
   onDeleteSelectedPolylineVertex: (index: number) => void;
   isLayerPanelVisible: boolean;
+  imageOverlayMode: boolean;
+  imageOverlayCorners: [number, number][];
+  onMapClickForImageOverlay: (latlng: [number, number]) => void;
 }
 
 // Internal component to handle map events, as it must be a child of MapContainer
@@ -46,10 +49,14 @@ const MapEventsHandler: React.FC<{
   drawingMode: 'marker' | 'polygon' | 'polyline' | 'none';
   onMarkerAdd: (latlng: L.LatLng) => void;
   onPolylinePointAdd: (latlng: L.LatLng) => void;
-}> = ({ drawingMode, onMarkerAdd, onPolylinePointAdd }) => {
+  imageOverlayMode: boolean;
+  onMapClickForImageOverlay: (latlng: [number, number]) => void;
+}> = ({ drawingMode, onMarkerAdd, onPolylinePointAdd, imageOverlayMode, onMapClickForImageOverlay }) => {
   useMapEvents({
     click(e) {
-      if (drawingMode === 'marker') {
+      if (imageOverlayMode) {
+        onMapClickForImageOverlay([e.latlng.lat, e.latlng.lng]);
+      } else if (drawingMode === 'marker') {
         onMarkerAdd(e.latlng);
       } else if (drawingMode === 'polyline') {
         onPolylinePointAdd(e.latlng);
@@ -110,6 +117,9 @@ const MapComponent: React.FC<MapComponentProps> = ({
   selectedPolyline,
   onDeleteSelectedPolylineVertex,
   isLayerPanelVisible,
+  imageOverlayMode,
+  imageOverlayCorners,
+  onMapClickForImageOverlay,
 }) => {
   const lvivPosition: [number, number] = [49.8397, 24.0297];
   
@@ -156,6 +166,8 @@ const MapComponent: React.FC<MapComponentProps> = ({
         drawingMode={drawingMode} 
         onMarkerAdd={handleAddMarker}
         onPolylinePointAdd={handleAddPolylinePoint} 
+        imageOverlayMode={imageOverlayMode}
+        onMapClickForImageOverlay={onMapClickForImageOverlay}
       />
       <CompassControl />
       <MapResizer isPanelVisible={isLayerPanelVisible} />
@@ -185,6 +197,28 @@ const MapComponent: React.FC<MapComponentProps> = ({
           points={selectedPolyline.coordinates}
           onDeletePoint={onDeleteSelectedPolylineVertex}
         />
+      )}
+
+      {/* Preview rectangle for image overlay selection */}
+      {imageOverlayMode && imageOverlayCorners.length > 0 && (
+        <Rectangle
+          bounds={imageOverlayCorners.length === 1
+            ? [imageOverlayCorners[0], imageOverlayCorners[0]]
+            : [imageOverlayCorners[0], imageOverlayCorners[1]]}
+          pathOptions={{ color: '#1976d2', weight: 2, dashArray: '4 4', fillOpacity: 0.1 }}
+        />
+      )}
+
+      {/* Image overlays from all visible layers */}
+      {layers.filter(layer => layer.visible).flatMap(layer =>
+        (layer.imageOverlays || []).map(overlay => (
+          <ImageOverlay
+            key={overlay.id}
+            url={overlay.imageUrl}
+            bounds={overlay.bounds}
+            opacity={typeof overlay.opacity === 'number' ? overlay.opacity : layer.opacity}
+          />
+        ))
       )}
     </MapContainer>
   );

@@ -591,3 +591,82 @@ h1 {
   box-shadow: var(--shadow);
   transition: left 0.3s ease-in-out;
 } 
+
+/* Image Overlay Dialog Styles */
+.image-overlay-dialog-overlay {
+  position: fixed;
+  z-index: 3000;
+  left: 0; top: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.image-overlay-dialog {
+  background: #fff;
+  border-radius: 14px;
+  padding: 2.5rem 2rem 2rem 2rem;
+  min-width: 340px;
+  max-width: 95vw;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.image-overlay-dialog h4 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+  text-align: center;
+}
+.image-overlay-dialog input[type="file"] {
+  margin-bottom: 1.2rem;
+}
+.image-preview-container {
+  margin-bottom: 1.2rem;
+  display: flex;
+  justify-content: center;
+}
+.image-preview {
+  max-width: 260px;
+  max-height: 180px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+}
+.dialog-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.2rem;
+  justify-content: center;
+}
+.dialog-actions button {
+  padding: 0.5rem 1.3rem;
+  border-radius: 6px;
+  border: none;
+  font-size: 1rem;
+  font-weight: 500;
+  background: #1976d2;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.18s;
+}
+.dialog-actions button:disabled {
+  background: #b0b0b0;
+  color: #fff;
+  cursor: not-allowed;
+}
+.dialog-actions .close-btn {
+  background: #fff;
+  color: #222;
+  border: 1px solid #bbb;
+}
+.dialog-actions .close-btn:hover {
+  background: #d32f2f !important;
+  color: #fff !important;
+  border-color: #d32f2f !important;
+}
+.dialog-actions button:not(:disabled):hover {
+  background: #1256a3;
+}

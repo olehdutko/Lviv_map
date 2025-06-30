@@ -5,6 +5,7 @@ interface LayerPanelProps {
   layers: Layer[];
   activeLayerId: string;
   onAddLayer: () => void;
+  onAddImageOverlay: () => void;
   onUpdateLayer: (layerId: string, updates: Partial<Layer>) => void;
   onDeleteLayer: (layerId: string) => void;
   onSetActiveLayer: (layerId: string) => void;
@@ -17,6 +18,7 @@ const LayerPanel: React.FC<LayerPanelProps> = ({
   layers,
   activeLayerId,
   onAddLayer,
+  onAddImageOverlay,
   onUpdateLayer,
   onDeleteLayer,
   onSetActiveLayer,
@@ -29,6 +31,7 @@ const LayerPanel: React.FC<LayerPanelProps> = ({
       <h2>Шари</h2>
       <div className="panel-controls">
         <button onClick={onAddLayer}>Додати шар</button>
+        <button onClick={onAddImageOverlay}>Додати мапу</button>
         <button onClick={onExport}>Експорт</button>
         <label>
           Імпорт

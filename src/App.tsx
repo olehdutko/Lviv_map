@@ -5,6 +5,7 @@ import ObjectEditor from './components/ObjectEditor';
 import PolylineEditor from './components/PolylineEditor';
 import Snackbar from './components/Snackbar';
 import ConfirmationDialog from './components/ConfirmationDialog';
+import ImageOverlayDialog from './components/ImageOverlayDialog';
 import { Layer, MapMarker, MapPolyline } from './types';
 import './index.css';
 
@@ -22,6 +23,7 @@ function App() {
       markers: [],
       polygons: [],
       polylines: [],
+      imageOverlays: [],
       drawingSettings: {
         markerColor: '#ff0000',
         polygonColor: '#ff0000',
@@ -43,6 +45,9 @@ function App() {
   const [snackbarMessage, setSnackbarMessage] = useState<string>('');
   const [isLayerPanelVisible, setIsLayerPanelVisible] = useState(true);
   const [layerToDelete, setLayerToDelete] = useState<string | null>(null);
+  const [isImageOverlayDialogOpen, setIsImageOverlayDialogOpen] = useState(false);
+  const [pendingImageOverlay, setPendingImageOverlay] = useState<string | null>(null); // base64 image
+  const [imageOverlayCorners, setImageOverlayCorners] = useState<[number, number][]>([]);
 
   const presetColors = ['#ff4500', '#ff8c00', '#ffd700', '#90ee90', '#00ced1', '#1e90ff', '#c71585', '#333333'];
 
@@ -255,6 +260,47 @@ function App() {
 
   const activeLayer = layers.find(l => l.id === activeLayerId);
 
+  const handleAddImageOverlay = () => {
+    setIsImageOverlayDialogOpen(true);
+  };
+
+  const handleImageOverlaySelected = (imageUrl: string) => {
+    setPendingImageOverlay(imageUrl);
+    setIsImageOverlayDialogOpen(false);
+    setImageOverlayCorners([]);
+    // Далі буде інтерактивний вибір кутів
+  };
+
+  const handleMapClickForImageOverlay = (latlng: [number, number]) => {
+    if (!pendingImageOverlay) return;
+    if (imageOverlayCorners.length < 1) {
+      setImageOverlayCorners([latlng]);
+    } else if (imageOverlayCorners.length === 1) {
+      const corners = [imageOverlayCorners[0], latlng];
+      setImageOverlayCorners(corners);
+      // Додаємо imageOverlay у активний шар
+      if (activeLayer) {
+        const newOverlay = {
+          id: `image-overlay-${Date.now()}`,
+          title: 'Мапа',
+          imageUrl: pendingImageOverlay,
+          bounds: corners as [[number, number], [number, number]],
+        };
+        handleUpdateLayer(activeLayerId, {
+          imageOverlays: [...(activeLayer.imageOverlays || []), newOverlay],
+        });
+      }
+      setPendingImageOverlay(null);
+      setImageOverlayCorners([]);
+    }
+  };
+
+  const handleCancelImageOverlay = () => {
+    setIsImageOverlayDialogOpen(false);
+    setPendingImageOverlay(null);
+    setImageOverlayCorners([]);
+  };
+
   return (
     <div style={{ position: 'relative', height: '100vh', overflow: 'hidden' }}>
       <button 
@@ -275,6 +321,7 @@ function App() {
           onSetActiveLayer={setActiveLayerId}
           onExport={handleExport}
           onImport={handleImport}
+          onAddImageOverlay={handleAddImageOverlay}
         />
         <div 
           className={`map-wrapper ${drawingMode === 'polyline' ? 'drawing-polyline' : ''}`}
@@ -351,9 +398,9 @@ function App() {
             </div>
           )}
 
-          <MapComponent 
-            layers={layers} 
-            activeLayerId={activeLayerId} 
+          <MapComponent
+            layers={layers}
+            activeLayerId={activeLayerId}
             onUpdateLayer={handleUpdateLayer}
             drawingMode={drawingMode}
             onSetSelectedObject={handleSetSelectedObject}
@@ -365,6 +412,9 @@ function App() {
             selectedPolyline={selectedPolyline}
             onDeleteSelectedPolylineVertex={handleDeleteSelectedPolylineVertex}
             isLayerPanelVisible={isLayerPanelVisible}
+            imageOverlayMode={!!pendingImageOverlay}
+            imageOverlayCorners={imageOverlayCorners}
+            onMapClickForImageOverlay={handleMapClickForImageOverlay}
           />
           {selectedObject && !selectedPolyline && (
             <ObjectEditor
@@ -396,6 +446,18 @@ function App() {
               onCancel={cancelDeleteLayer}
             />
           )}
+          {pendingImageOverlay && (
+            <div className="image-overlay-hint">
+              {imageOverlayCorners.length === 0 && 'Клікніть на карті верхній лівий кут зображення'}
+              {imageOverlayCorners.length === 1 && 'Клікніть на карті нижній правий кут зображення'}
+            </div>
+          )}
+          {/* Діалог додавання мапи (зображення) */}
+          <ImageOverlayDialog
+            isOpen={isImageOverlayDialogOpen}
+            onImageSelected={handleImageOverlaySelected}
+            onCancel={handleCancelImageOverlay}
+          />
         </div>
       </div>
     </div>
