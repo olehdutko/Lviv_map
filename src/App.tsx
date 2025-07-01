@@ -32,6 +32,7 @@ function App() {
         polylineWeight: 3,
         polylineDashArray: '', // solid line
       },
+      mapType: 'plan',
     };
   };
 
@@ -48,9 +49,6 @@ function App() {
   const [isImageOverlayDialogOpen, setIsImageOverlayDialogOpen] = useState(false);
   const [pendingImageOverlay, setPendingImageOverlay] = useState<string | null>(null); // base64 image
   const [imageOverlayCorners, setImageOverlayCorners] = useState<[number, number][]>([]);
-  const [currentMapType, setCurrentMapType] = useState<
-    'plan' | 'satellite' | 'landscape' | 'humanitarian' | 'transport' | 'cycle' | 'cartoLight' | 'cartoDark'
-  >('plan');
 
   const presetColors = ['#ff4500', '#ff8c00', '#ffd700', '#90ee90', '#00ced1', '#1e90ff', '#c71585', '#333333'];
 
@@ -94,9 +92,9 @@ function App() {
     }
   };
 
-  // crosshair cursor when selecting overlay corners
+  // crosshair cursor when selecting overlay corners або малюванні маркера/лінії
   useEffect(() => {
-    if (pendingImageOverlay) {
+    if (drawingMode === 'marker' || drawingMode === 'polyline' || pendingImageOverlay) {
       document.body.classList.add('osr-crosshair');
     } else {
       document.body.classList.remove('osr-crosshair');
@@ -104,7 +102,7 @@ function App() {
     return () => {
       document.body.classList.remove('osr-crosshair');
     };
-  }, [pendingImageOverlay]);
+  }, [drawingMode, pendingImageOverlay]);
 
   const handleAddLayer = () => {
     const newLayer = createNewLayer();
@@ -381,20 +379,6 @@ function App() {
           style={{ flexGrow: 1, position: 'relative' }}
         >
           <div className="drawing-toolbar">
-            <select
-              value={currentMapType}
-              onChange={e => setCurrentMapType(e.target.value as typeof currentMapType)}
-              style={{ fontSize: 16, padding: '4px 8px', marginRight: 8 }}
-            >
-              <option value="plan">План</option>
-              <option value="satellite">Супутник</option>
-              <option value="landscape">Ландшафт</option>
-              <option value="humanitarian">Humanitarian</option>
-              <option value="transport">Transport</option>
-              <option value="cycle">Cycle</option>
-              <option value="cartoLight">Carto Light</option>
-              <option value="cartoDark">Carto Dark</option>
-            </select>
             <button 
               className={drawingMode === 'marker' ? 'active' : ''}
               onClick={() => toggleDrawingMode('marker')}
@@ -483,7 +467,6 @@ function App() {
             imageOverlayMode={!!pendingImageOverlay}
             imageOverlayCorners={imageOverlayCorners}
             onMapClickForImageOverlay={handleMapClickForImageOverlay}
-            currentMapType={currentMapType}
             mapTypes={mapTypes}
             mapApiKeys={mapApiKeys}
           />

@@ -6,6 +6,7 @@ import { Layer, MapMarker, MapPolyline, MapImageOverlay } from '../types';
 import MarkersLayer from './MarkersLayer';
 import PolylinesLayer from './PolylinesLayer';
 import DrawingVerticesLayer from './DrawingVerticesLayer';
+import IIIFOverlay from './IIIFOverlay';
 
 // Fix for default marker icon
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -43,7 +44,6 @@ interface MapComponentProps {
   imageOverlayMode: boolean;
   imageOverlayCorners: [number, number][];
   onMapClickForImageOverlay: (latlng: [number, number]) => void;
-  currentMapType: 'plan' | 'satellite' | 'landscape' | 'humanitarian' | 'transport' | 'cycle' | 'cartoLight' | 'cartoDark';
   mapTypes: {
     plan: { url: string; attribution: string };
     satellite: { url: string; attribution: string };
@@ -231,7 +231,7 @@ const DeselectOverlayOnMapClick: React.FC<{
   return null;
 };
 
-const MapComponent: React.FC<MapComponentProps> = ({ 
+const MapComponent: React.FC<MapComponentProps & { onShowSnackbar?: (msg: string) => void }> = ({ 
   layers, 
   activeLayerId, 
   onUpdateLayer,
@@ -249,13 +249,95 @@ const MapComponent: React.FC<MapComponentProps> = ({
   imageOverlayMode,
   imageOverlayCorners,
   onMapClickForImageOverlay,
-  currentMapType,
   mapTypes,
   mapApiKeys,
+  onShowSnackbar,
 }) => {
   const lvivPosition: [number, number] = [49.8397, 24.0297];
   const mapRef = useRef<L.Map | null>(null);
-  
+  const [iiifOverlays, setIiifOverlays] = React.useState<{id: string, url: string, visible?: boolean}[]>([]);
+
+  const activeLayer = layers.find(l => l.id === activeLayerId);
+  const mapType = (activeLayer?.mapType as keyof typeof mapTypes) || 'plan';
+  const opacity = activeLayer?.opacity ?? 1;
+  const visible = activeLayer?.visible ?? true;
+
+  const handleAddIIIFOverlay = async () => {
+    const url = window.prompt('Введіть IIIF Image API info.json або manifest URL:');
+    if (!url) return;
+    let infoUrl = url;
+    try {
+      if (url.endsWith('manifest') || url.includes('presentation')) {
+        // Це manifest, треба знайти info.json
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('Не вдалося завантажити manifest');
+        const manifest = await resp.json();
+        // IIIF Presentation API 2.x
+        const canvas = manifest.sequences?.[0]?.canvases?.[0];
+        const service = canvas?.images?.[0]?.resource?.service;
+        let serviceId = service?.['@id'] || service?.id;
+        if (!serviceId && Array.isArray(service)) serviceId = service[0]?.['@id'] || service[0]?.id;
+        if (serviceId) {
+          infoUrl = serviceId.replace(/\/$/, '') + '/info.json';
+          setIiifOverlays(prev => [
+            ...prev,
+            { id: `iiif-${Date.now()}`, url: infoUrl, visible: true }
+          ]);
+          return;
+        } else {
+          // fallback: додаємо тільки у imageOverlays активного шару, НЕ у iiifOverlays
+          const imageUrl = canvas?.images?.[0]?.resource?.['@id'] || canvas?.images?.[0]?.resource?.id;
+          const width = canvas?.width;
+          const height = canvas?.height;
+          if (imageUrl) {
+            let bounds: [[number, number], [number, number]];
+            const center: [number, number] = [49.8397, 24.0297];
+            if (width && height && width > 0 && height > 0) {
+              const maxSize = 0.02;
+              const aspect = width / height;
+              let w = maxSize, h = maxSize;
+              if (aspect > 1) h = maxSize / aspect; else w = maxSize * aspect;
+              bounds = [
+                [center[0] - h / 2, center[1] - w / 2],
+                [center[0] + h / 2, center[1] + w / 2]
+              ];
+            } else {
+              bounds = [
+                [center[0], center[1]],
+                [center[0] + 0.01, center[1] + 0.01]
+              ];
+            }
+            const newOverlay = {
+              id: `img-${Date.now()}`,
+              title: manifest.label?.[0]?.['@value'] || 'IIIF Image',
+              imageUrl,
+              corners: bounds,
+              opacity: 1,
+              visible: true,
+            };
+            onUpdateLayer(activeLayerId, {
+              imageOverlays: [
+                ...((layers.find(l => l.id === activeLayerId)?.imageOverlays) || []),
+                newOverlay
+              ]
+            });
+            onShowSnackbar && onShowSnackbar('IIIF Image API не знайдено, додано як просте зображення');
+            onSetSelectedObject && onSetSelectedObject(newOverlay);
+            return;
+          }
+          throw new Error('Не знайдено IIIF Image API у manifest і немає прямого зображення');
+        }
+      }
+      // Якщо це info.json, додаємо як IIIFOverlay
+      setIiifOverlays(prev => [
+        ...prev,
+        { id: `iiif-${Date.now()}`, url: infoUrl, visible: true }
+      ]);
+    } catch (e) {
+      alert('Помилка підключення IIIF: ' + (e as Error).message);
+    }
+  };
+
   const handleAddMarker = (latlng: L.LatLng) => {
     const activeLayer = layers.find(l => l.id === activeLayerId);
     if (!activeLayer) {
@@ -290,10 +372,14 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
   return (
     <MapContainer center={lvivPosition} zoom={13} style={{ flexGrow: 1 }}>
-      <TileLayer
-        attribution={mapTypes[currentMapType].attribution}
-        url={mapTypes[currentMapType].url}
-      />
+      {layers.filter(l => l.visible).map(layer => (
+        <TileLayer
+          key={layer.id}
+          attribution={mapTypes[layer.mapType as keyof typeof mapTypes].attribution}
+          url={mapTypes[layer.mapType as keyof typeof mapTypes].url}
+          opacity={layer.opacity ?? 1}
+        />
+      ))}
       
       <MapEventsHandler 
         drawingMode={drawingMode} 
@@ -367,6 +453,16 @@ const MapComponent: React.FC<MapComponentProps> = ({
             );
           })
       )}
+
+      {/* IIIF overlays */}
+      {iiifOverlays
+        .filter(o => o.visible !== false && o.url && o.url.endsWith('info.json'))
+        .map(overlay => (
+          <IIIFOverlay key={overlay.id} url={overlay.url} />
+      ))}
+      <button style={{ position: 'absolute', top: 70, right: 16, zIndex: 1200 }} onClick={handleAddIIIFOverlay}>
+        Додати IIIF мапу
+      </button>
     </MapContainer>
   );
 };

@@ -62,4 +62,5 @@ export interface Layer {
   polylines: MapPolyline[];
   imageOverlays: MapImageOverlay[];
   drawingSettings: DrawingSettings;
+  mapType: string;
 } 

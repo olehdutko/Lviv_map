@@ -74,6 +74,22 @@ const LayerPanel: React.FC<LayerPanelProps> = ({
               onChange={(e) => onUpdateLayer(layer.id, { name: e.target.value })}
               onClick={(e) => e.stopPropagation()}
             />
+            <select
+              className="layer-maptype-select"
+              value={layer.mapType}
+              onChange={e => onUpdateLayer(layer.id, { mapType: e.target.value })}
+              onClick={e => e.stopPropagation()}
+              style={{ marginTop: 4, marginBottom: 4 }}
+            >
+              <option value="plan">🗺️ План</option>
+              <option value="satellite">🛰️ Супутник</option>
+              <option value="landscape">🌄 Ландшафт</option>
+              <option value="humanitarian">🤝 Humanitarian</option>
+              <option value="transport">🚍 Transport</option>
+              <option value="cycle">🚴 Cycle</option>
+              <option value="cartoLight">💡 Carto Light</option>
+              <option value="cartoDark">🌙 Carto Dark</option>
+            </select>
             {(layer.imageOverlays || []).length > 0 && (
               <div style={{ margin: '0.5rem 0 0.5rem 0.5rem', paddingLeft: 4, borderLeft: '2px solid #eee' }}>
                 <div style={{ fontSize: '0.95em', fontWeight: 500, marginBottom: 4 }}>Зображення:</div>
