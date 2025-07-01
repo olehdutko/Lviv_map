@@ -63,4 +63,5 @@ export interface Layer {
   imageOverlays: MapImageOverlay[];
   drawingSettings: DrawingSettings;
   mapType: string;
+  showLabels?: boolean;
 } 

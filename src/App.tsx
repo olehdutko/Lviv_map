@@ -33,6 +33,7 @@ function App() {
         polylineDashArray: '', // solid line
       },
       mapType: 'plan',
+      showLabels: true,
     };
   };
 

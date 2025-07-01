@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Tooltip, useMapEvents, useMap, Rectangle, ImageOverlay, CircleMarker } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -138,13 +138,128 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({ overlay, 
   const bottomLeft: [number, number] = [bottomRight[0], topLeft[1]];
   const cornersArr: [number, number][] = [topLeft, topRight, bottomRight, bottomLeft];
 
-  // Debug: лог bounds
-  console.log('Overlay bounds:', bounds);
-  if (
-    bounds.some(([lat, lng]) => isNaN(lat) || isNaN(lng) || !isFinite(lat) || !isFinite(lng))
-  ) {
-    return <div style={{color: 'red', background: 'white'}}>Некоректні bounds overlay: {JSON.stringify(bounds)}</div>;
+  // 1. Обчислити центр bounds:
+  const center: [number, number] = [
+    (bounds[0][0] + bounds[1][0]) / 2,
+    (bounds[0][1] + bounds[1][1]) / 2,
+  ];
+
+  // refs для leaflet ImageOverlay
+  const imageOverlayRef = useRef<any>(null);
+  // refs для drag
+  const dragData = useRef<{startLatLng: [number, number], startBounds: [[number, number], [number, number]], mouseStart: {x: number, y: number}} | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [draggingCenter, setDraggingCenter] = useState<[number, number] | null>(null);
+
+  // Перетворення latlng -> точка на екрані
+  const map = useMap();
+  function latLngToContainerPoint(latlng: [number, number]) {
+    return map.latLngToContainerPoint(latlng);
   }
+  function containerPointToLatLng(point: {x: number, y: number}): [number, number] {
+    const latlng = map.containerPointToLatLng([point.x, point.y]);
+    return [latlng.lat, latlng.lng];
+  }
+
+  // 2. Іконка drag&drop (хрестик) — через div
+  const moveIconCenter = draggingCenter || center;
+  const moveIconDiv = (
+    <div
+      style={{
+        position: 'absolute',
+        left: latLngToContainerPoint(moveIconCenter).x - 11,
+        top: latLngToContainerPoint(moveIconCenter).y - 11,
+        width: 22,
+        height: 22,
+        zIndex: 1200,
+        cursor: isDragging ? 'grabbing' : 'grab',
+        userSelect: 'none',
+        pointerEvents: 'auto',
+        fontSize: 22,
+        filter: 'drop-shadow(0 1px 2px #fff)'
+      }}
+      onMouseDown={e => {
+        e.preventDefault();
+        e.stopPropagation();
+        map.dragging.disable();
+        setIsDragging(true);
+        dragData.current = {
+          startLatLng: center,
+          startBounds: bounds,
+          mouseStart: { x: e.clientX, y: e.clientY }
+        };
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+      }}
+      title="Перетягнути мапу"
+    >
+      ✥
+    </div>
+  );
+
+  function handleMouseMove(e: MouseEvent) {
+    if (!dragData.current) return;
+    const { startLatLng, startBounds, mouseStart } = dragData.current;
+    const dx = e.clientX - mouseStart.x;
+    const dy = e.clientY - mouseStart.y;
+    // Знаходимо новий центр
+    const startPoint = latLngToContainerPoint(startLatLng);
+    const newPoint = { x: startPoint.x + dx, y: startPoint.y + dy };
+    const newCenter = containerPointToLatLng(newPoint);
+    const delta: [number, number] = [
+      newCenter[0] - startLatLng[0],
+      newCenter[1] - startLatLng[1],
+    ];
+    const newBounds: [[number, number], [number, number]] = [
+      [startBounds[0][0] + delta[0], startBounds[0][1] + delta[1]],
+      [startBounds[1][0] + delta[0], startBounds[1][1] + delta[1]],
+    ];
+    // напряму оновлюємо bounds через leaflet API
+    if (imageOverlayRef.current && imageOverlayRef.current.setBounds) {
+      imageOverlayRef.current.setBounds(newBounds);
+    }
+    setDraggingCenter(newCenter);
+  }
+
+  function handleMouseUp(e: MouseEvent) {
+    setIsDragging(false);
+    setDraggingCenter(null);
+    map.dragging.enable();
+    if (!dragData.current) return;
+    const { startLatLng, startBounds, mouseStart } = dragData.current;
+    const dx = e.clientX - mouseStart.x;
+    const dy = e.clientY - mouseStart.y;
+    const startPoint = latLngToContainerPoint(startLatLng);
+    const newPoint = { x: startPoint.x + dx, y: startPoint.y + dy };
+    const newCenter = containerPointToLatLng(newPoint);
+    const delta: [number, number] = [
+      newCenter[0] - startLatLng[0],
+      newCenter[1] - startLatLng[1],
+    ];
+    const newBounds: [[number, number], [number, number]] = [
+      [startBounds[0][0] + delta[0], startBounds[0][1] + delta[1]],
+      [startBounds[1][0] + delta[0], startBounds[1][1] + delta[1]],
+    ];
+    onUpdateLayer(layerId, {
+      imageOverlays: imageOverlays.map(o => o.id === overlay.id ? { ...o, corners: normalizeBounds(newBounds) } : o)
+    });
+    // знайти оновлений overlay з новими координатами
+    const updatedOverlay = { ...overlay, corners: normalizeBounds(newBounds) };
+    setTimeout(() => {
+      onSetSelectedObject(updatedOverlay);
+    }, 0);
+    dragData.current = null;
+    window.removeEventListener('mousemove', handleMouseMove);
+    window.removeEventListener('mouseup', handleMouseUp);
+  }
+
+  // Кастомний divIcon для поінта
+  const pointIcon = L.divIcon({
+    className: '',
+    html: '<div style="width:6px;height:6px;border-radius:50%;background:#ff4d4d;border:1px solid #d32f2f;box-shadow:0 0 1px #333;"></div>',
+    iconSize: [6, 6],
+    iconAnchor: [3, 3],
+  });
 
   // index: 0=topLeft, 1=topRight, 2=bottomRight, 3=bottomLeft
   const handleDrag = (index: number, e: L.LeafletEvent) => {
@@ -170,24 +285,23 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({ overlay, 
     });
   };
 
-  // Кастомний divIcon для поінта
-  const pointIcon = L.divIcon({
-    className: '',
-    html: '<div style="width:6px;height:6px;border-radius:50%;background:#ff4d4d;border:1px solid #d32f2f;box-shadow:0 0 1px #333;"></div>',
-    iconSize: [6, 6],
-    iconAnchor: [3, 3],
-  });
-
   return (
     <>
       <ImageOverlay
+        ref={imageOverlayRef}
         url={overlay.imageUrl}
         bounds={bounds}
         opacity={typeof overlay.opacity === 'number' ? overlay.opacity : 1}
       />
       <Rectangle
         bounds={bounds}
-        pathOptions={{ color: 'transparent', weight: 1, fillOpacity: 0, interactive: true }}
+        pathOptions={{
+          color: selected ? 'transparent' : 'transparent',
+          weight: selected ? 0 : 1,
+          fillOpacity: selected ? 0.2 : 0,
+          fillColor: selected ? '#1976d2' : undefined,
+          interactive: true
+        }}
         eventHandlers={{
           click: () => onSetSelectedObject(overlay)
         }}
@@ -203,6 +317,8 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({ overlay, 
           }}
         />
       ))}
+      {/* draggable центр через кастомний div */}
+      {selected && moveIconDiv}
     </>
   );
 };
@@ -372,14 +488,63 @@ const MapComponent: React.FC<MapComponentProps & { onShowSnackbar?: (msg: string
 
   return (
     <MapContainer center={lvivPosition} zoom={13} style={{ flexGrow: 1 }}>
-      {layers.filter(l => l.visible).map(layer => (
-        <TileLayer
-          key={layer.id}
-          attribution={mapTypes[layer.mapType as keyof typeof mapTypes].attribution}
-          url={mapTypes[layer.mapType as keyof typeof mapTypes].url}
-          opacity={layer.opacity ?? 1}
-        />
-      ))}
+      {layers.filter(l => l.visible).map(layer => {
+        const mapType = layer.mapType as keyof typeof mapTypes;
+        const opacity = layer.opacity ?? 1;
+        // Carto Light/Dark підтримують no-labels/labels only
+        if (mapType === 'cartoLight' || mapType === 'cartoDark') {
+          const baseUrl = mapType === 'cartoLight'
+            ? 'https://{s}.basemaps.cartocdn.com/rastertiles/light_nolabels/{z}/{x}/{y}.png'
+            : 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png';
+          const labelsUrl = mapType === 'cartoLight'
+            ? 'https://{s}.basemaps.cartocdn.com/rastertiles/light_only_labels/{z}/{x}/{y}.png'
+            : 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}.png';
+          return (
+            <React.Fragment key={layer.id}>
+              <TileLayer
+                attribution={mapTypes[mapType].attribution}
+                url={baseUrl}
+                opacity={opacity}
+              />
+              {layer.showLabels !== false && (
+                <TileLayer
+                  url={labelsUrl}
+                  opacity={opacity}
+                  attribution=""
+                />
+              )}
+            </React.Fragment>
+          );
+        }
+        // Для супутника додаємо labels only від ArcGIS
+        if (mapType === 'satellite') {
+          return (
+            <React.Fragment key={layer.id}>
+              <TileLayer
+                attribution={mapTypes[mapType].attribution}
+                url={mapTypes[mapType].url}
+                opacity={opacity}
+              />
+              {layer.showLabels !== false && (
+                <TileLayer
+                  url="https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+                  opacity={opacity}
+                  attribution=""
+                />
+              )}
+            </React.Fragment>
+          );
+        }
+        // Для інших типів просто рендеримо як є
+        return (
+          <TileLayer
+            key={layer.id}
+            attribution={mapTypes[mapType].attribution}
+            url={mapTypes[mapType].url}
+            opacity={opacity}
+          />
+        );
+      })}
       
       <MapEventsHandler 
         drawingMode={drawingMode} 
@@ -438,7 +603,6 @@ const MapComponent: React.FC<MapComponentProps & { onShowSnackbar?: (msg: string
       {layers.filter(layer => layer.visible).flatMap(layer =>
         (layer.imageOverlays || [])
           .map(overlay => {
-            console.log('Overlay in render:', overlay);
             if (!overlay.corners || overlay.corners.length !== 2 || overlay.visible === false) return null;
             return (
               <DraggableImageOverlay

@@ -90,6 +90,21 @@ const LayerPanel: React.FC<LayerPanelProps> = ({
               <option value="cartoLight">💡 Carto Light</option>
               <option value="cartoDark">🌙 Carto Dark</option>
             </select>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, marginBottom: 4 }} onClick={e => e.stopPropagation()}>
+              <input
+                type="checkbox"
+                checked={layer.showLabels ?? true}
+                disabled={layer.mapType === 'plan'}
+                onChange={e => onUpdateLayer(layer.id, { showLabels: e.target.checked })}
+                style={{ marginRight: 4 }}
+              />
+              Геоназви
+              {layer.mapType === 'plan' && (
+                <span style={{ color: '#888', fontSize: 12, marginLeft: 4 }} title="Для цього типу карти геоназви не можна вимкнути">
+                  (неможливо вимкнути для OSM)
+                </span>
+              )}
+            </label>
             {(layer.imageOverlays || []).length > 0 && (
               <div style={{ margin: '0.5rem 0 0.5rem 0.5rem', paddingLeft: 4, borderLeft: '2px solid #eee' }}>
                 <div style={{ fontSize: '0.95em', fontWeight: 500, marginBottom: 4 }}>Зображення:</div>
