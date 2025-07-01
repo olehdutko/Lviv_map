@@ -380,34 +380,45 @@ const MapComponent: React.FC<MapComponentProps & { onShowSnackbar?: (msg: string
 
   const handleAddIIIFOverlay = async () => {
     const url = window.prompt('Введіть IIIF Image API info.json або manifest URL:');
+
     if (!url) return;
     let infoUrl = url;
     try {
-      if (url.endsWith('manifest') || url.includes('presentation')) {
+      // https://iiif.io/api/cookbook/recipe/0001-mvm-image/manifest.json
+      if (url.endsWith('manifest.json') || url.endsWith('info.json') || url.endsWith('manifest') || url.includes('presentation')) {
         // Це manifest, треба знайти info.json
         const resp = await fetch(url);
         if (!resp.ok) throw new Error('Не вдалося завантажити manifest');
         const manifest = await resp.json();
+        console.log('manifest', manifest);
         // IIIF Presentation API 2.x
         const canvas = manifest.sequences?.[0]?.canvases?.[0];
         const service = canvas?.images?.[0]?.resource?.service;
         let serviceId = service?.['@id'] || service?.id;
+        console.log('serviceId', serviceId);
+console.log('manifest.items', manifest.items);
+console.log('body.id', manifest.items?.[0]?.items?.[0]?.items?.[0]?.body?.id);
         if (!serviceId && Array.isArray(service)) serviceId = service[0]?.['@id'] || service[0]?.id;
+        // IIIF Presentation API 3.x (canvas.items[0].items[0].body.service[0].id)
+        if (!serviceId && manifest.items && manifest.items[0]?.items?.[0]?.items?.[0]?.body?.service?.[0]?.id) {
+          serviceId = manifest.items[0].items[0].items[0].body.service[0].id;
+        }
         if (serviceId) {
           infoUrl = serviceId.replace(/\/$/, '') + '/info.json';
+          console.log('Додаю IIIF overlay:', infoUrl);
           setIiifOverlays(prev => [
             ...prev,
             { id: `iiif-${Date.now()}`, url: infoUrl, visible: true }
           ]);
           return;
         } else {
-          // fallback: додаємо тільки у imageOverlays активного шару, НЕ у iiifOverlays
+          // fallback: IIIF 2.x (canvas.images[0].resource['@id'])
           const imageUrl = canvas?.images?.[0]?.resource?.['@id'] || canvas?.images?.[0]?.resource?.id;
           const width = canvas?.width;
           const height = canvas?.height;
           if (imageUrl) {
-            let bounds: [[number, number], [number, number]];
             const center: [number, number] = [49.8397, 24.0297];
+            let bounds: [[number, number], [number, number]];
             if (width && height && width > 0 && height > 0) {
               const maxSize = 0.02;
               const aspect = width / height;
@@ -437,18 +448,73 @@ const MapComponent: React.FC<MapComponentProps & { onShowSnackbar?: (msg: string
                 newOverlay
               ]
             });
+            console.log('Додаю overlay:', newOverlay);
             onShowSnackbar && onShowSnackbar('IIIF Image API не знайдено, додано як просте зображення');
             onSetSelectedObject && onSetSelectedObject(newOverlay);
             return;
           }
-          throw new Error('Не знайдено IIIF Image API у manifest і немає прямого зображення');
+          // fallback: IIIF 3.x (canvas.items[0].items[0].body.id)
+          // покращено: width/height з body, а не з canvas
+          if (!serviceId && manifest.items && manifest.items[0]?.items?.[0]?.items?.[0]?.body?.id) {
+            const canvas = manifest.items[0];
+            const annotation = canvas?.items?.[0]?.items?.[0];
+            const body = annotation?.body;
+            const imageUrl = body?.id;
+            const width = body?.width;
+            const height = body?.height;
+            if (imageUrl) {
+              const center: [number, number] = [49.8397, 24.0297];
+              let bounds: [[number, number], [number, number]];
+              if (width && height && width > 0 && height > 0) {
+                const maxSize = 0.02;
+                const aspect = width / height;
+                let w = maxSize, h = maxSize;
+                if (aspect > 1) h = maxSize / aspect; else w = maxSize * aspect;
+                bounds = [
+                  [center[0] - h / 2, center[1] - w / 2],
+                  [center[0] + h / 2, center[1] + w / 2]
+                ];
+              } else {
+                bounds = [
+                  [center[0], center[1]],
+                  [center[0] + 0.01, center[1] + 0.01]
+                ];
+              }
+              const newOverlay = {
+                id: `img-${Date.now()}`,
+                title: manifest.label?.en?.[0] || manifest.label?.[0]?.['@value'] || 'IIIF Image',
+                imageUrl,
+                corners: bounds,
+                opacity: 1,
+                visible: true,
+              };
+              onUpdateLayer(activeLayerId, {
+                imageOverlays: [
+                  ...((layers.find(l => l.id === activeLayerId)?.imageOverlays) || []),
+                  newOverlay
+                ]
+              });
+              onShowSnackbar && onShowSnackbar('IIIF manifest не містить info.json, додано як просте зображення');
+              onSetSelectedObject && onSetSelectedObject(newOverlay);
+              return;
+            }
+          }
+        }
+        
+// Якщо це info.json, додаємо як IIIFOverlay
+        if (infoUrl.includes('info.json')) {
+          console.log('Додаю -----------');
+
+          console.log('Додаю IIIF overlay:', infoUrl);
+          setIiifOverlays(prev => [
+            ...prev,
+            { id: `iiif-${Date.now()}`, url: infoUrl, visible: true }
+          ]);
+        } else {
+          onShowSnackbar && onShowSnackbar('URL не є IIIF info.json. Додавання IIIFOverlay неможливе.');
+          alert('URL не є IIIF info.json. Додавання IIIFOverlay неможливе.');
         }
       }
-      // Якщо це info.json, додаємо як IIIFOverlay
-      setIiifOverlays(prev => [
-        ...prev,
-        { id: `iiif-${Date.now()}`, url: infoUrl, visible: true }
-      ]);
     } catch (e) {
       alert('Помилка підключення IIIF: ' + (e as Error).message);
     }
@@ -620,10 +686,11 @@ const MapComponent: React.FC<MapComponentProps & { onShowSnackbar?: (msg: string
 
       {/* IIIF overlays */}
       {iiifOverlays
-        .filter(o => o.visible !== false && o.url && o.url.endsWith('info.json'))
-        .map(overlay => (
-          <IIIFOverlay key={overlay.id} url={overlay.url} />
-      ))}
+        .filter(o => o.visible !== false && o.url && o.url.includes('info.json'))
+        .map(overlay => {
+          console.log('Рендерю IIIF overlay:', overlay);
+          return <IIIFOverlay key={overlay.id} url={overlay.url} />;
+        })}
       <button style={{ position: 'absolute', top: 70, right: 16, zIndex: 1200 }} onClick={handleAddIIIFOverlay}>
         Додати IIIF мапу
       </button>
