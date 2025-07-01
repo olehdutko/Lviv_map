@@ -42,6 +42,21 @@ interface MapComponentProps {
   imageOverlayMode: boolean;
   imageOverlayCorners: [number, number][];
   onMapClickForImageOverlay: (latlng: [number, number]) => void;
+  currentMapType: 'plan' | 'satellite' | 'landscape' | 'humanitarian' | 'transport' | 'cycle' | 'cartoLight' | 'cartoDark';
+  mapTypes: {
+    plan: { url: string; attribution: string };
+    satellite: { url: string; attribution: string };
+    landscape: { url: string; attribution: string };
+    humanitarian: { url: string; attribution: string };
+    transport: { url: string; attribution: string };
+    cycle: { url: string; attribution: string };
+    cartoLight: { url: string; attribution: string };
+    cartoDark: { url: string; attribution: string };
+  };
+  mapApiKeys: {
+    thunderforest: string;
+    carto: string;
+  };
 }
 
 // Internal component to handle map events, as it must be a child of MapContainer
@@ -167,6 +182,9 @@ const MapComponent: React.FC<MapComponentProps> = ({
   imageOverlayMode,
   imageOverlayCorners,
   onMapClickForImageOverlay,
+  currentMapType,
+  mapTypes,
+  mapApiKeys,
 }) => {
   const lvivPosition: [number, number] = [49.8397, 24.0297];
   const mapRef = useRef<L.Map | null>(null);
@@ -239,8 +257,8 @@ const MapComponent: React.FC<MapComponentProps> = ({
   return (
     <MapContainer center={lvivPosition} zoom={13} style={{ flexGrow: 1 }}>
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution={mapTypes[currentMapType].attribution}
+        url={mapTypes[currentMapType].url}
       />
       
       <MapEventsHandler 

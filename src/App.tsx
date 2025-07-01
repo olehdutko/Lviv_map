@@ -48,8 +48,51 @@ function App() {
   const [isImageOverlayDialogOpen, setIsImageOverlayDialogOpen] = useState(false);
   const [pendingImageOverlay, setPendingImageOverlay] = useState<string | null>(null); // base64 image
   const [imageOverlayCorners, setImageOverlayCorners] = useState<[number, number][]>([]);
+  const [currentMapType, setCurrentMapType] = useState<
+    'plan' | 'satellite' | 'landscape' | 'humanitarian' | 'transport' | 'cycle' | 'cartoLight' | 'cartoDark'
+  >('plan');
 
   const presetColors = ['#ff4500', '#ff8c00', '#ffd700', '#90ee90', '#00ced1', '#1e90ff', '#c71585', '#333333'];
+
+  const mapApiKeys = {
+    thunderforest: 'YOUR_THUNDERFOREST_API_KEY',
+    carto: 'YOUR_CARTO_API_KEY',
+  };
+
+  const mapTypes = {
+    plan: {
+      url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    },
+    satellite: {
+      url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      attribution: '&copy; <a href="https://www.esri.com/">Esri</a>'
+    },
+    landscape: {
+      url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+      attribution: '&copy; <a href="https://opentopomap.org/">OpenTopoMap</a> contributors'
+    },
+    humanitarian: {
+      url: "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Humanitarian style'
+    },
+    transport: {
+      url: `https://tile.thunderforest.com/transport/{z}/{x}/{y}.png?apikey=${mapApiKeys.thunderforest}`,
+      attribution: '&copy; <a href="https://www.thunderforest.com/">Thunderforest</a>, &copy; OpenStreetMap contributors'
+    },
+    cycle: {
+      url: `https://tile.thunderforest.com/cycle/{z}/{x}/{y}.png?apikey=${mapApiKeys.thunderforest}`,
+      attribution: '&copy; <a href="https://www.thunderforest.com/">Thunderforest</a>, &copy; OpenStreetMap contributors'
+    },
+    cartoLight: {
+      url: `https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}${mapApiKeys.carto ? `?apikey=${mapApiKeys.carto}` : ''}.png`,
+      attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>'
+    },
+    cartoDark: {
+      url: `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}${mapApiKeys.carto ? `?apikey=${mapApiKeys.carto}` : ''}.png`,
+      attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>'
+    }
+  };
 
   // crosshair cursor when selecting overlay corners
   useEffect(() => {
@@ -313,13 +356,6 @@ function App() {
 
   return (
     <div style={{ position: 'relative', height: '100vh', overflow: 'hidden' }}>
-      <button 
-        className="toggle-panel-btn"
-        onClick={() => setIsLayerPanelVisible(!isLayerPanelVisible)}
-        style={{ left: isLayerPanelVisible ? '286px' : '10px' }}
-      >
-        {isLayerPanelVisible ? '«' : '»'}
-      </button>
       <div style={{ display: 'flex', height: '100%' }}>
         <LayerPanel
           className={!isLayerPanelVisible ? 'panel-hidden' : ''}
@@ -338,6 +374,20 @@ function App() {
           style={{ flexGrow: 1, position: 'relative' }}
         >
           <div className="drawing-toolbar">
+            <select
+              value={currentMapType}
+              onChange={e => setCurrentMapType(e.target.value as typeof currentMapType)}
+              style={{ fontSize: 16, padding: '4px 8px', marginRight: 8 }}
+            >
+              <option value="plan">План</option>
+              <option value="satellite">Супутник</option>
+              <option value="landscape">Ландшафт</option>
+              <option value="humanitarian">Humanitarian</option>
+              <option value="transport">Transport</option>
+              <option value="cycle">Cycle</option>
+              <option value="cartoLight">Carto Light</option>
+              <option value="cartoDark">Carto Dark</option>
+            </select>
             <button 
               className={drawingMode === 'marker' ? 'active' : ''}
               onClick={() => toggleDrawingMode('marker')}
@@ -425,6 +475,9 @@ function App() {
             imageOverlayMode={!!pendingImageOverlay}
             imageOverlayCorners={imageOverlayCorners}
             onMapClickForImageOverlay={handleMapClickForImageOverlay}
+            currentMapType={currentMapType}
+            mapTypes={mapTypes}
+            mapApiKeys={mapApiKeys}
           />
           {selectedObject && !selectedPolyline && (
             <ObjectEditor
@@ -465,11 +518,7 @@ function App() {
             </div>
           )}
           {/* Діалог додавання мапи (зображення) */}
-          <ImageOverlayDialog
-            isOpen={isImageOverlayDialogOpen}
-            onImageSelected={handleImageOverlaySelected}
-            onCancel={handleCancelImageOverlay}
-          />
+          <ImageOverlayDialog isOpen={false} onImageSelected={() => {}} onCancel={() => {}} />
         </div>
       </div>
     </div>
