@@ -60,7 +60,7 @@ const MarkersLayer: React.FC<MarkersLayerProps> = ({
     <>
       {layers.filter(layer => layer.visible).map(layer => (
         <React.Fragment key={layer.id}>
-          {layer.markers.map(marker => (
+          {layer.markers.filter(marker => !/^image-overlay-.*-corner-\d+$/.test(marker.id)).map(marker => (
             <Marker
               key={marker.id}
               position={[marker.lat, marker.lng]}

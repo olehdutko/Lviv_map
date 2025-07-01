@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Tooltip, useMapEvents, useMap, Rectangle, ImageOverlay } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Tooltip, useMapEvents, useMap, Rectangle, ImageOverlay, CircleMarker } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Layer, MapMarker, MapPolyline, MapImageOverlay } from '../types';
@@ -30,7 +30,8 @@ interface MapComponentProps {
   activeLayerId: string;
   onUpdateLayer: (layerId: string, updates: Partial<Layer>) => void;
   drawingMode: 'marker' | 'polygon' | 'polyline' | 'none';
-  onSetSelectedObject: (object: MapMarker | null) => void;
+  onSetSelectedObject: (object: MapMarker | MapImageOverlay | null) => void;
+  selectedObject: MapMarker | MapImageOverlay | null;
   currentPolylinePoints: [number, number][];
   onAddPolylinePoint: (point: [number, number]) => void;
   onDeletePolyline: (layerId: string, polylineId: string) => void;
@@ -118,31 +119,64 @@ const CompassControl = () => {
   return null;
 };
 
-type DraggableImageOverlayProps = {
+interface DraggableImageOverlayProps {
   overlay: MapImageOverlay;
   layerId: string;
   imageOverlays: MapImageOverlay[];
   onUpdateLayer: (layerId: string, updates: Partial<Layer>) => void;
-};
+  selected: boolean;
+  onSetSelectedObject: (object: MapImageOverlay) => void;
+}
 
-const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({ overlay, layerId, imageOverlays, onUpdateLayer }) => {
-  if (!overlay.corners || overlay.corners.length !== 4) return null;
+const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({ overlay, layerId, imageOverlays, onUpdateLayer, selected, onSetSelectedObject }) => {
+  if (!overlay.corners || overlay.corners.length !== 2) return null;
 
-  // Сортуємо кути для bounds: [topLeft, bottomRight]
-  const bounds: [[number, number], [number, number]] = [
-    [Math.min(...overlay.corners.map(c => c[0])), Math.min(...overlay.corners.map(c => c[1]))],
-    [Math.max(...overlay.corners.map(c => c[0])), Math.max(...overlay.corners.map(c => c[1]))],
-  ];
+  // corners: [[minLat, minLng], [maxLat, maxLng]]
+  const bounds: [[number, number], [number, number]] = overlay.corners;
+  const [topLeft, bottomRight] = bounds;
+  const topRight: [number, number] = [topLeft[0], bottomRight[1]];
+  const bottomLeft: [number, number] = [bottomRight[0], topLeft[1]];
+  const cornersArr: [number, number][] = [topLeft, topRight, bottomRight, bottomLeft];
 
+  // Debug: лог bounds
+  console.log('Overlay bounds:', bounds);
+  if (
+    bounds.some(([lat, lng]) => isNaN(lat) || isNaN(lng) || !isFinite(lat) || !isFinite(lng))
+  ) {
+    return <div style={{color: 'red', background: 'white'}}>Некоректні bounds overlay: {JSON.stringify(bounds)}</div>;
+  }
+
+  // index: 0=topLeft, 1=topRight, 2=bottomRight, 3=bottomLeft
   const handleDrag = (index: number, e: L.LeafletEvent) => {
     const marker = e.target as L.Marker;
     const newPos: [number, number] = [marker.getLatLng().lat, marker.getLatLng().lng];
-    let newCorners = [...(overlay.corners as [number, number][])];
-    newCorners[index] = newPos;
+    let newBounds: [[number, number], [number, number]] = [...bounds];
+    switch (index) {
+      case 0: // topLeft
+        newBounds = [newPos, bottomRight];
+        break;
+      case 1: // topRight
+        newBounds = [[newPos[0], bottomLeft[1]], [bottomRight[0], newPos[1]]];
+        break;
+      case 2: // bottomRight
+        newBounds = [topLeft, newPos];
+        break;
+      case 3: // bottomLeft
+        newBounds = [[topLeft[0], newPos[1]], [newPos[0], topRight[1]]];
+        break;
+    }
     onUpdateLayer(layerId, {
-      imageOverlays: imageOverlays.map(o => o.id === overlay.id ? { ...o, corners: newCorners } : o)
+      imageOverlays: imageOverlays.map(o => o.id === overlay.id ? { ...o, corners: normalizeBounds(newBounds) } : o)
     });
   };
+
+  // Кастомний divIcon для поінта
+  const pointIcon = L.divIcon({
+    className: '',
+    html: '<div style="width:6px;height:6px;border-radius:50%;background:#ff4d4d;border:1px solid #d32f2f;box-shadow:0 0 1px #333;"></div>',
+    iconSize: [6, 6],
+    iconAnchor: [3, 3],
+  });
 
   return (
     <>
@@ -151,10 +185,18 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({ overlay, 
         bounds={bounds}
         opacity={typeof overlay.opacity === 'number' ? overlay.opacity : 1}
       />
-      {overlay.corners.map((corner, i) => (
+      <Rectangle
+        bounds={bounds}
+        pathOptions={{ color: 'transparent', weight: 1, fillOpacity: 0, interactive: true }}
+        eventHandlers={{
+          click: () => onSetSelectedObject(overlay)
+        }}
+      />
+      {selected && cornersArr.map((corner, i) => (
         <Marker
           key={i}
           position={corner}
+          icon={pointIcon}
           draggable={true}
           eventHandlers={{
             dragend: (e: L.LeafletEvent) => handleDrag(i, e)
@@ -165,12 +207,37 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({ overlay, 
   );
 };
 
+function normalizeBounds(bounds: [[number, number], [number, number]]): [[number, number], [number, number]] {
+  const lats = [bounds[0][0], bounds[1][0]];
+  const lngs = [bounds[0][1], bounds[1][1]];
+  return [
+    [Math.min(...lats), Math.min(...lngs)],
+    [Math.max(...lats), Math.max(...lngs)]
+  ];
+}
+
+// Хук для зняття виділення overlay при кліку поза ним
+const DeselectOverlayOnMapClick: React.FC<{
+  selectedObject: MapMarker | MapImageOverlay | null;
+  onSetSelectedObject: (object: MapMarker | MapImageOverlay | null) => void;
+}> = ({ selectedObject, onSetSelectedObject }) => {
+  useMapEvents({
+    click: () => {
+      if (selectedObject && 'corners' in selectedObject) {
+        onSetSelectedObject(null);
+      }
+    }
+  });
+  return null;
+};
+
 const MapComponent: React.FC<MapComponentProps> = ({ 
   layers, 
   activeLayerId, 
   onUpdateLayer,
   drawingMode,
   onSetSelectedObject,
+  selectedObject,
   currentPolylinePoints,
   onAddPolylinePoint,
   onDeletePolyline,
@@ -221,39 +288,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
     onUpdateLayer(layer.id, { markers: updatedMarkers });
   };
 
-  useEffect(() => {
-    console.log('imageOverlays:', layers.flatMap(l => l.imageOverlays));
-    const map = mapRef.current;
-    // @ts-ignore
-    if (!map || !window.L || !window.L.georeferenced) return;
-    // @ts-ignore
-    if (!map._osrGeoOverlays) map._osrGeoOverlays = {};
-    layers.filter(l => l.visible).forEach(layer => {
-      (layer.imageOverlays || []).forEach(overlay => {
-        // @ts-ignore
-        if (map._osrGeoOverlays[overlay.id]) return;
-        if (!overlay.corners) return;
-        // @ts-ignore
-        const geo = window.L.georeferenced(
-          overlay.imageUrl,
-          overlay.corners
-        ).addTo(map);
-        // @ts-ignore
-        map._osrGeoOverlays[overlay.id] = geo;
-      });
-    });
-    // @ts-ignore
-    Object.keys(map._osrGeoOverlays).forEach(id => {
-      const stillExists = layers.some(l => l.visible && (l.imageOverlays || []).some(o => o.id === id));
-      if (!stillExists) {
-        // @ts-ignore
-        map.removeLayer(map._osrGeoOverlays[id]);
-        // @ts-ignore
-        delete map._osrGeoOverlays[id];
-      }
-    });
-  }, [layers]);
-
   return (
     <MapContainer center={lvivPosition} zoom={13} style={{ flexGrow: 1 }}>
       <TileLayer
@@ -267,6 +301,10 @@ const MapComponent: React.FC<MapComponentProps> = ({
         onPolylinePointAdd={handleAddPolylinePoint} 
         imageOverlayMode={imageOverlayMode}
         onMapClickForImageOverlay={onMapClickForImageOverlay}
+      />
+      <DeselectOverlayOnMapClick
+        selectedObject={selectedObject}
+        onSetSelectedObject={onSetSelectedObject}
       />
       <CompassControl />
       <MapResizer isPanelVisible={isLayerPanelVisible} />
@@ -313,16 +351,21 @@ const MapComponent: React.FC<MapComponentProps> = ({
       {/* Image overlays with draggable bounds */}
       {layers.filter(layer => layer.visible).flatMap(layer =>
         (layer.imageOverlays || [])
-          .filter(overlay => overlay.corners && overlay.corners.length === 4 && overlay.visible !== false)
-          .map(overlay => (
-            <DraggableImageOverlay
-              key={overlay.id}
-              overlay={overlay}
-              layerId={layer.id}
-              imageOverlays={layer.imageOverlays}
-              onUpdateLayer={onUpdateLayer}
-            />
-          ))
+          .map(overlay => {
+            console.log('Overlay in render:', overlay);
+            if (!overlay.corners || overlay.corners.length !== 2 || overlay.visible === false) return null;
+            return (
+              <DraggableImageOverlay
+                key={overlay.id}
+                overlay={overlay}
+                layerId={layer.id}
+                imageOverlays={layer.imageOverlays}
+                onUpdateLayer={onUpdateLayer}
+                selected={!!selectedObject && 'id' in selectedObject && overlay.id === selectedObject.id}
+                onSetSelectedObject={onSetSelectedObject}
+              />
+            );
+          })
       )}
     </MapContainer>
   );

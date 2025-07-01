@@ -38,7 +38,7 @@ function App() {
   const [layers, setLayers] = useState<Layer[]>([createNewLayer()]);
   const [activeLayerId, setActiveLayerId] = useState<string>(layers[0].id);
   const [drawingMode, setDrawingMode] = useState<DrawingMode>('none');
-  const [selectedObject, setSelectedObject] = useState<MapMarker | null>(null);
+  const [selectedObject, setSelectedObject] = useState<MapMarker | import('./types').MapImageOverlay | null>(null);
   const [selectedPolyline, setSelectedPolyline] = useState<MapPolyline | null>(null);
   const [selectedPolylineLayerId, setSelectedPolylineLayerId] = useState<string | null>(null);
   const [currentPolylinePoints, setCurrentPolylinePoints] = useState<[number, number][]>([]);
@@ -202,7 +202,7 @@ function App() {
     setSelectedObject(null); // Deselect after deleting
   };
   
-  const handleSetSelectedObject = (object: MapMarker | null) => {
+  const handleSetSelectedObject = (object: MapMarker | import('./types').MapImageOverlay | null) => {
     setSelectedObject(object);
     if (object) {
       setDrawingMode('none'); // Turn off drawing mode when an object is selected
@@ -320,33 +320,40 @@ function App() {
   };
 
   const handleImageOverlaySelected = (imageUrl: string) => {
-    setPendingImageOverlay(imageUrl);
     setIsImageOverlayDialogOpen(false);
-    setImageOverlayCorners([]);
-    // Далі буде інтерактивний вибір кутів
-  };
-
-  const handleMapClickForImageOverlay = (latlng: [number, number]) => {
-    if (!pendingImageOverlay) return;
-    if (imageOverlayCorners.length < 3) {
-      setImageOverlayCorners(prev => [...prev, latlng]);
-    } else if (imageOverlayCorners.length === 3) {
-      const corners = [...imageOverlayCorners, latlng];
-      setImageOverlayCorners([]);
-      if (activeLayer) {
-        const newOverlay = {
-          id: `image-overlay-${Date.now()}`,
-          title: 'Мапа',
-          imageUrl: pendingImageOverlay,
-          corners,
-        };
-        handleUpdateLayer(activeLayerId, {
-          imageOverlays: [...(activeLayer.imageOverlays || []), newOverlay],
-        });
-      }
-      setPendingImageOverlay(null);
+    if (activeLayer) {
+      // Центр карти (Lviv за замовчуванням)
+      const center: [number, number] = [49.8397, 24.0297];
+      const delta = 0.005;
+      const corners: [number, number][] = [
+        [center[0] - delta, center[1] - delta],
+        [center[0] - delta, center[1] + delta],
+        [center[0] + delta, center[1] + delta],
+        [center[0] + delta, center[1] - delta],
+      ];
+      const overlayId = `image-overlay-${Date.now()}`;
+      // corners: [[minLat, minLng], [maxLat, maxLng]]
+      const lats = corners.map(c => c[0]);
+      const lngs = corners.map(c => c[1]);
+      const bounds: [[number, number], [number, number]] = [
+        [Math.min(...lats), Math.min(...lngs)],
+        [Math.max(...lats), Math.max(...lngs)]
+      ];
+      const newOverlay = {
+        id: overlayId,
+        title: 'Мапа',
+        imageUrl,
+        corners: bounds,
+        opacity: 1,
+        visible: true,
+      };
+      handleUpdateLayer(activeLayerId, {
+        imageOverlays: [...(activeLayer.imageOverlays || []), newOverlay],
+      });
     }
   };
+
+  const handleMapClickForImageOverlay = () => {};
 
   const handleCancelImageOverlay = () => {
     setIsImageOverlayDialogOpen(false);
@@ -464,6 +471,7 @@ function App() {
             onUpdateLayer={handleUpdateLayer}
             drawingMode={drawingMode}
             onSetSelectedObject={handleSetSelectedObject}
+            selectedObject={selectedObject}
             currentPolylinePoints={currentPolylinePoints}
             onAddPolylinePoint={handleAddPolylinePoint}
             onDeletePolyline={handleDeletePolyline}
@@ -479,7 +487,7 @@ function App() {
             mapTypes={mapTypes}
             mapApiKeys={mapApiKeys}
           />
-          {selectedObject && !selectedPolyline && (
+          {selectedObject && !selectedPolyline && 'lat' in selectedObject && 'lng' in selectedObject && (
             <ObjectEditor
               selectedObject={selectedObject}
               onUpdate={handleUpdateSelectedObject}
@@ -518,7 +526,11 @@ function App() {
             </div>
           )}
           {/* Діалог додавання мапи (зображення) */}
-          <ImageOverlayDialog isOpen={false} onImageSelected={() => {}} onCancel={() => {}} />
+          <ImageOverlayDialog
+            isOpen={isImageOverlayDialogOpen}
+            onImageSelected={handleImageOverlaySelected}
+            onCancel={handleCancelImageOverlay}
+          />
         </div>
       </div>
     </div>
