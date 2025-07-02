@@ -203,6 +203,7 @@ h1 {
   box-shadow: var(--shadow);
   display: flex;
   gap: 5px;
+  min-width: 60%; /* Збільшуємо ширину на 10% */
 }
 
 .drawing-toolbar button {

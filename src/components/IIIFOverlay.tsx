@@ -20,6 +20,7 @@ export default function IIIFOverlay({ url }: { url: string }) {
         }
         // @ts-ignore
         iiifLayer = (L as any).tileLayer.iiif(url);
+        console.log('Додаю IIIFOverlay на мапу', url);
         iiifLayer.on('error', (e: any) => {
           alert('IIIF: Bounds are not valid або не вдалося завантажити тайли');
         });
@@ -41,9 +42,26 @@ export default function IIIFOverlay({ url }: { url: string }) {
 
     return () => {
       removed = true;
-      if (iiifLayer && map.hasLayer(iiifLayer)) {
+      if (iiifLayer) {
         map.removeLayer(iiifLayer);
       }
+      // Додатково: видаляємо всі IIIF tileLayer
+      map.eachLayer(layer => {
+        // @ts-ignore
+        if (layer instanceof L.TileLayer && layer._url && (layer._url.includes('iiif') || layer._url.includes('wellcomecollection'))) {
+          map.removeLayer(layer);
+        }
+      });
+      // Примусово очищаємо DOM-контейнер тайлів
+      const container = map.getContainer && map.getContainer();
+      if (container) {
+        const tiles = container.querySelectorAll('.leaflet-tile-container, .leaflet-layer, .leaflet-tile');
+        tiles.forEach(el => {
+          // @ts-ignore
+          if (el && el.parentNode) el.parentNode.removeChild(el);
+        });
+      }
+      map.invalidateSize();
     };
   }, [url, map]);
 

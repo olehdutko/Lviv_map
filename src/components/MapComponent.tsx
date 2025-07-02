@@ -58,6 +58,7 @@ interface MapComponentProps {
     thunderforest: string;
     carto: string;
   };
+  onMapRef?: (ref: any) => void;
 }
 
 // Internal component to handle map events, as it must be a child of MapContainer
@@ -347,6 +348,15 @@ const DeselectOverlayOnMapClick: React.FC<{
   return null;
 };
 
+// Додаю хук для збереження map-інстансу у mapRef
+function MapRefSync({ mapRef }: { mapRef: React.MutableRefObject<L.Map | null> }) {
+  const map = useMap();
+  useEffect(() => {
+    mapRef.current = map;
+  }, [map]);
+  return null;
+}
+
 const MapComponent: React.FC<MapComponentProps & { onShowSnackbar?: (msg: string) => void }> = ({ 
   layers, 
   activeLayerId, 
@@ -368,10 +378,12 @@ const MapComponent: React.FC<MapComponentProps & { onShowSnackbar?: (msg: string
   mapTypes,
   mapApiKeys,
   onShowSnackbar,
+  onMapRef,
 }) => {
   const lvivPosition: [number, number] = [49.8397, 24.0297];
   const mapRef = useRef<L.Map | null>(null);
   const [iiifOverlays, setIiifOverlays] = React.useState<{id: string, url: string, visible?: boolean}[]>([]);
+  const [showBasemap, setShowBasemap] = useState(true);
 
   const activeLayer = layers.find(l => l.id === activeLayerId);
   const mapType = (activeLayer?.mapType as keyof typeof mapTypes) || 'plan';
@@ -379,14 +391,13 @@ const MapComponent: React.FC<MapComponentProps & { onShowSnackbar?: (msg: string
   const visible = activeLayer?.visible ?? true;
 
   const handleAddIIIFOverlay = async () => {
+    console.log('handleAddIIIFOverlay викликано');
     const url = window.prompt('Введіть IIIF Image API info.json або manifest URL:');
 
     if (!url) return;
     let infoUrl = url;
     try {
-      // https://iiif.io/api/cookbook/recipe/0001-mvm-image/manifest.json
-      if (url.endsWith('manifest.json') || url.endsWith('info.json') || url.endsWith('manifest') || url.includes('presentation')) {
-        // Це manifest, треба знайти info.json
+      if (url.endsWith('manifest.json') || url.endsWith('info.json') || url.endsWith('manifest') || url.includes('presentation')) {        // Це manifest, треба знайти info.json
         const resp = await fetch(url);
         if (!resp.ok) throw new Error('Не вдалося завантажити manifest');
         const manifest = await resp.json();
@@ -410,6 +421,7 @@ console.log('body.id', manifest.items?.[0]?.items?.[0]?.items?.[0]?.body?.id);
             ...prev,
             { id: `iiif-${Date.now()}`, url: infoUrl, visible: true }
           ]);
+          setShowBasemap(false);
           return;
         } else {
           // fallback: IIIF 2.x (canvas.images[0].resource['@id'])
@@ -503,13 +515,12 @@ console.log('body.id', manifest.items?.[0]?.items?.[0]?.items?.[0]?.body?.id);
         
 // Якщо це info.json, додаємо як IIIFOverlay
         if (infoUrl.includes('info.json')) {
-          console.log('Додаю -----------');
-
           console.log('Додаю IIIF overlay:', infoUrl);
           setIiifOverlays(prev => [
             ...prev,
             { id: `iiif-${Date.now()}`, url: infoUrl, visible: true }
           ]);
+          setShowBasemap(false);
         } else {
           onShowSnackbar && onShowSnackbar('URL не є IIIF info.json. Додавання IIIFOverlay неможливе.');
           alert('URL не є IIIF info.json. Додавання IIIFOverlay неможливе.');
@@ -518,6 +529,15 @@ console.log('body.id', manifest.items?.[0]?.items?.[0]?.items?.[0]?.body?.id);
     } catch (e) {
       alert('Помилка підключення IIIF: ' + (e as Error).message);
     }
+  };
+
+  // Додаю функцію для видалення IIIFOverlay (і повернення підложки)
+  const handleRemoveIIIFOverlay = (id: string) => {
+    setIiifOverlays(prev => {
+      const updated = prev.filter(o => o.id !== id);
+      if (updated.length === 0) setShowBasemap(true);
+      return updated;
+    });
   };
 
   const handleAddMarker = (latlng: L.LatLng) => {
@@ -552,9 +572,20 @@ console.log('body.id', manifest.items?.[0]?.items?.[0]?.items?.[0]?.body?.id);
     onUpdateLayer(layer.id, { markers: updatedMarkers });
   };
 
+  useEffect(() => {
+    if (onMapRef) {
+      onMapRef(mapRef.current);
+    }
+  }, [onMapRef]);
+
   return (
-    <MapContainer center={lvivPosition} zoom={13} style={{ flexGrow: 1 }}>
-      {layers.filter(l => l.visible).map(layer => {
+    <MapContainer
+      center={lvivPosition}
+      zoom={13}
+      style={{ flexGrow: 1 }}
+    >
+      <MapRefSync mapRef={mapRef} />
+      {showBasemap && layers.filter(l => l.visible).map(layer => {
         const mapType = layer.mapType as keyof typeof mapTypes;
         const opacity = layer.opacity ?? 1;
         // Carto Light/Dark підтримують no-labels/labels only
@@ -688,12 +719,17 @@ console.log('body.id', manifest.items?.[0]?.items?.[0]?.items?.[0]?.body?.id);
       {iiifOverlays
         .filter(o => o.visible !== false && o.url && o.url.includes('info.json'))
         .map(overlay => {
-          console.log('Рендерю IIIF overlay:', overlay);
-          return <IIIFOverlay key={overlay.id} url={overlay.url} />;
+          return (
+            <React.Fragment key={overlay.id}>
+              <IIIFOverlay url={overlay.url} />
+              <button style={{position:'absolute',top:100,right:16,zIndex:1300}} onClick={() => handleRemoveIIIFOverlay(overlay.id)}>
+                Прибрати IIIFOverlay
+              </button>
+            </React.Fragment>
+          );
         })}
-      <button style={{ position: 'absolute', top: 70, right: 16, zIndex: 1200 }} onClick={handleAddIIIFOverlay}>
-        Додати IIIF мапу
-      </button>
+
+
     </MapContainer>
   );
 };

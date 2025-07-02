@@ -12,6 +12,14 @@ import './index.css';
 // Define DrawingMode type
 type DrawingMode = 'marker' | 'polygon' | 'polyline' | 'none';
 
+// GeoSearch result type
+interface GeoSearchResult {
+  place_id: string;
+  display_name: string;
+  lat: string;
+  lon: string;
+}
+
 function App() {
   const createNewLayer = (): Layer => {
     const layerId = `layer-${Date.now()}`;
@@ -50,6 +58,11 @@ function App() {
   const [isImageOverlayDialogOpen, setIsImageOverlayDialogOpen] = useState(false);
   const [pendingImageOverlay, setPendingImageOverlay] = useState<string | null>(null); // base64 image
   const [imageOverlayCorners, setImageOverlayCorners] = useState<[number, number][]>([]);
+  
+  // GeoSearch state
+  const [geoSearch, setGeoSearch] = useState('');
+  const [geoResults, setGeoResults] = useState<GeoSearchResult[]>([]);
+  const [mapRef, setMapRef] = useState<any>(null);
 
   const presetColors = ['#ff4500', '#ff8c00', '#ffd700', '#90ee90', '#00ced1', '#1e90ff', '#c71585', '#333333'];
 
@@ -360,6 +373,196 @@ function App() {
     setImageOverlayCorners([]);
   };
 
+  // GeoSearch functions
+  const handleGeoSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setGeoSearch(value);
+    
+    if (value.length > 2) {
+      try {
+        const resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(value)}`);
+        const results = await resp.json();
+        setGeoResults(results.slice(0, 5)); // Limit to 5 results
+      } catch (error) {
+        console.error('Error fetching geocoding results:', error);
+        setGeoResults([]);
+      }
+    } else {
+      setGeoResults([]);
+    }
+  };
+
+  const handleGeoResultSelect = (result: GeoSearchResult) => {
+    if (mapRef) {
+      mapRef.setView([parseFloat(result.lat), parseFloat(result.lon)], 16);
+    }
+    
+    // Add marker to active layer
+    if (activeLayerId) {
+      const activeLayer = layers.find(l => l.id === activeLayerId);
+      if (activeLayer) {
+        const newMarker = {
+          id: `marker-${Date.now()}`,
+          lat: parseFloat(result.lat),
+          lng: parseFloat(result.lon),
+          title: result.display_name,
+          color: activeLayer.drawingSettings?.markerColor || '#1976d2',
+        };
+        handleUpdateLayer(activeLayerId, {
+          markers: [...(activeLayer.markers || []), newMarker],
+        });
+        setSnackbarMessage(`Додано маркер: ${result.display_name}`);
+      }
+    }
+    
+    setGeoResults([]);
+    setGeoSearch(result.display_name);
+  };
+
+  const handleMapRef = (ref: any) => {
+    setMapRef(ref);
+  };
+
+  // IIIF Overlay functions
+  const handleAddIIIFOverlay = async () => {
+    console.log('handleAddIIIFOverlay викликано');
+    const url = window.prompt('Введіть IIIF Image API info.json або manifest URL:');
+
+    if (!url) return;
+    let infoUrl = url;
+    try {
+      if (url.endsWith('manifest.json') || url.endsWith('info.json') || url.endsWith('manifest') || url.includes('presentation')) {
+        // Це manifest, треба знайти info.json
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('Не вдалося завантажити manifest');
+        const manifest = await resp.json();
+        console.log('manifest', manifest);
+        
+        // IIIF Presentation API 2.x
+        const canvas = manifest.sequences?.[0]?.canvases?.[0];
+        const service = canvas?.images?.[0]?.resource?.service;
+        let serviceId = service?.['@id'] || service?.id;
+        console.log('serviceId', serviceId);
+        console.log('manifest.items', manifest.items);
+        console.log('body.id', manifest.items?.[0]?.items?.[0]?.items?.[0]?.body?.id);
+        
+        if (!serviceId && Array.isArray(service)) serviceId = service[0]?.['@id'] || service[0]?.id;
+        
+        // IIIF Presentation API 3.x (canvas.items[0].items[0].body.service[0].id)
+        if (!serviceId && manifest.items && manifest.items[0]?.items?.[0]?.items?.[0]?.body?.service?.[0]?.id) {
+          serviceId = manifest.items[0].items[0].items[0].body.service[0].id;
+        }
+        
+        if (serviceId) {
+          infoUrl = serviceId.replace(/\/$/, '') + '/info.json';
+          console.log('Додаю IIIF overlay:', infoUrl);
+          setSnackbarMessage('IIIF мапу додано успішно');
+          return;
+        } else {
+          // fallback: IIIF 2.x (canvas.images[0].resource['@id'])
+          const imageUrl = canvas?.images?.[0]?.resource?.['@id'] || canvas?.images?.[0]?.resource?.id;
+          const width = canvas?.width;
+          const height = canvas?.height;
+          if (imageUrl) {
+            const center: [number, number] = [49.8397, 24.0297];
+            let bounds: [[number, number], [number, number]];
+            if (width && height && width > 0 && height > 0) {
+              const maxSize = 0.02;
+              const aspect = width / height;
+              let w = maxSize, h = maxSize;
+              if (aspect > 1) h = maxSize / aspect; else w = maxSize * aspect;
+              bounds = [
+                [center[0] - h / 2, center[1] - w / 2],
+                [center[0] + h / 2, center[1] + w / 2]
+              ];
+            } else {
+              bounds = [
+                [center[0], center[1]],
+                [center[0] + 0.01, center[1] + 0.01]
+              ];
+            }
+            const newOverlay = {
+              id: `img-${Date.now()}`,
+              title: manifest.label?.[0]?.['@value'] || 'IIIF Image',
+              imageUrl,
+              corners: bounds,
+              opacity: 1,
+              visible: true,
+            };
+            handleUpdateLayer(activeLayerId, {
+              imageOverlays: [
+                ...((layers.find(l => l.id === activeLayerId)?.imageOverlays) || []),
+                newOverlay
+              ]
+            });
+            console.log('Додаю overlay:', newOverlay);
+            setSnackbarMessage('IIIF Image API не знайдено, додано як просте зображення');
+            setSelectedObject(newOverlay);
+            return;
+          }
+          
+          // fallback: IIIF 3.x (canvas.items[0].items[0].body.id)
+          if (!serviceId && manifest.items && manifest.items[0]?.items?.[0]?.items?.[0]?.body?.id) {
+            const canvas = manifest.items[0];
+            const annotation = canvas?.items?.[0]?.items?.[0];
+            const body = annotation?.body;
+            const imageUrl = body?.id;
+            const width = body?.width;
+            const height = body?.height;
+            if (imageUrl) {
+              const center: [number, number] = [49.8397, 24.0297];
+              let bounds: [[number, number], [number, number]];
+              if (width && height && width > 0 && height > 0) {
+                const maxSize = 0.02;
+                const aspect = width / height;
+                let w = maxSize, h = maxSize;
+                if (aspect > 1) h = maxSize / aspect; else w = maxSize * aspect;
+                bounds = [
+                  [center[0] - h / 2, center[1] - w / 2],
+                  [center[0] + h / 2, center[1] + w / 2]
+                ];
+              } else {
+                bounds = [
+                  [center[0], center[1]],
+                  [center[0] + 0.01, center[1] + 0.01]
+                ];
+              }
+              const newOverlay = {
+                id: `img-${Date.now()}`,
+                title: manifest.label?.en?.[0] || manifest.label?.[0]?.['@value'] || 'IIIF Image',
+                imageUrl,
+                corners: bounds,
+                opacity: 1,
+                visible: true,
+              };
+              handleUpdateLayer(activeLayerId, {
+                imageOverlays: [
+                  ...((layers.find(l => l.id === activeLayerId)?.imageOverlays) || []),
+                  newOverlay
+                ]
+              });
+              setSnackbarMessage('IIIF manifest не містить info.json, додано як просте зображення');
+              setSelectedObject(newOverlay);
+              return;
+            }
+          }
+        }
+        
+        // Якщо це info.json, додаємо як IIIFOverlay
+        if (infoUrl.includes('info.json')) {
+          console.log('Додаю IIIF overlay:', infoUrl);
+          setSnackbarMessage('IIIF мапу додано успішно');
+        } else {
+          setSnackbarMessage('URL не є IIIF info.json. Додавання IIIFOverlay неможливе.');
+          alert('URL не є IIIF info.json. Додавання IIIFOverlay неможливе.');
+        }
+      }
+    } catch (e) {
+      setSnackbarMessage('Помилка підключення IIIF: ' + (e as Error).message);
+      alert('Помилка підключення IIIF: ' + (e as Error).message);
+    }
+  };
+
   return (
     <div style={{ position: 'relative', height: '100vh', overflow: 'hidden' }}>
       <div style={{ display: 'flex', height: '100%' }}>
@@ -394,6 +597,78 @@ function App() {
             >
               Малювати лінію
             </button>
+            
+            <button 
+              onClick={handleAddIIIFOverlay}
+              style={{
+                backgroundColor: '#1976d2',
+                color: 'white',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '500',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1565c0'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#1976d2'}
+              title="Додати IIIF мапу (IIIF Image API або manifest)"
+            >
+              Додати IIIF мапу
+            </button>
+            
+            {/* GeoSearch input */}
+            <div className="geo-search-container" style={{ position: 'relative', marginLeft: 'auto' }}>
+              <input
+                type="text"
+                placeholder="Пошук по географічних назвах"
+                value={geoSearch}
+                onChange={handleGeoSearch}
+                style={{ 
+                  width: 240, 
+                  padding: '8px 12px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  fontSize: '14px'
+                }}
+              />
+              {geoResults.length > 0 && (
+                <ul style={{ 
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  maxHeight: 200, 
+                  overflowY: 'auto', 
+                  margin: 0, 
+                  padding: 0, 
+                  listStyle: 'none',
+                  background: '#fff',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  zIndex: 1000
+                }}>
+                  {geoResults.map(result => (
+                    <li
+                      key={result.place_id}
+                      style={{ 
+                        cursor: 'pointer', 
+                        padding: '8px 12px', 
+                        borderBottom: '1px solid #eee',
+                        fontSize: '14px'
+                      }}
+                      onClick={() => handleGeoResultSelect(result)}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}
+                    >
+                      {result.display_name}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
 
           {drawingMode === 'polyline' && activeLayer && (
@@ -470,6 +745,7 @@ function App() {
             onMapClickForImageOverlay={handleMapClickForImageOverlay}
             mapTypes={mapTypes}
             mapApiKeys={mapApiKeys}
+            onMapRef={handleMapRef}
           />
           {selectedObject && !selectedPolyline && 'lat' in selectedObject && 'lng' in selectedObject && (
             <ObjectEditor
