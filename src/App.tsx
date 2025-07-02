@@ -64,6 +64,8 @@ function App() {
   const [geoResults, setGeoResults] = useState<GeoSearchResult[]>([]);
   const [mapRef, setMapRef] = useState<any>(null);
 
+  const [showDeletePolylineDialog, setShowDeletePolylineDialog] = useState<{ show: boolean, message: string } | null>(null);
+
   const presetColors = ['#ff4500', '#ff8c00', '#ffd700', '#90ee90', '#00ced1', '#1e90ff', '#c71585', '#333333'];
 
   const mapApiKeys = {
@@ -318,7 +320,10 @@ function App() {
     const updatedCoordinates = selectedPolyline.coordinates.filter((_, index) => index !== indexToDelete);
 
     if (updatedCoordinates.length < 2) {
-      alert("Лінія повинна мати принаймні 2 точки.");
+      setShowDeletePolylineDialog({
+        show: true,
+        message: 'Лінія повинна мати принаймні 2 точки. Ви хочете видалити всю лінію?'
+      });
       return;
     }
 
@@ -407,6 +412,7 @@ function App() {
           lng: parseFloat(result.lon),
           title: result.display_name,
           color: activeLayer.drawingSettings?.markerColor || '#1976d2',
+          iconName: 'search',
         };
         handleUpdateLayer(activeLayerId, {
           markers: [...(activeLayer.markers || []), newMarker],
@@ -566,6 +572,24 @@ function App() {
   return (
     <div style={{ position: 'relative', height: '100vh', overflow: 'hidden' }}>
       <div style={{ display: 'flex', height: '100%' }}>
+        <button
+          className="toggle-panel-btn"
+          style={{
+            left: isLayerPanelVisible ? 286 : 12,
+            top: 84,
+            width: 28,
+            height: 28,
+            transition: 'background 0.18s, color 0.18s, border-color 0.18s, left 0.3s, top 0.3s, width 0.18s, height 0.18s, box-shadow 0.18s',
+            position: 'absolute',
+            zIndex: 1001
+          }}
+          onClick={() => setIsLayerPanelVisible(v => !v)}
+          title={isLayerPanelVisible ? 'Сховати панель шарів' : 'Показати панель шарів'}
+        >
+          <span className="material-icons" style={{ fontSize: 18, color: '#1976d2', transition: 'color 0.18s, font-size 0.18s' }}>
+            {isLayerPanelVisible ? 'chevron_left' : 'chevron_right'}
+          </span>
+        </button>
         <LayerPanel
           className={!isLayerPanelVisible ? 'panel-hidden' : ''}
           layers={layers}
@@ -584,62 +608,30 @@ function App() {
         >
           <div className="drawing-toolbar">
             <button 
+              className="icon-btn"
               onClick={handleAddIIIFOverlay}
-              style={{
-                backgroundColor: '#1976d2',
-                color: 'white',
-                border: 'none',
-                padding: '4px 10px',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '13px',
-                fontWeight: '500',
-                transition: 'background-color 0.2s',
-                display: 'flex',
-                alignItems: 'center',
-                height: '32px',
-                lineHeight: 1
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1565c0'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#1976d2'}
               title="Додати IIIF мапу (IIIF Image API або manifest)"
             >
-              <span className="material-icons" style={{ fontSize: 18, marginRight: 4, verticalAlign: 'middle' }}>image</span>
+              <img src="/iiif-logo.png" alt="IIIF logo" style={{ height: 22, width: 22, marginRight: 6, verticalAlign: 'middle' }} />
               <span style={{ verticalAlign: 'middle' }}>IIIF мапа</span>
             </button>
             
             <button 
-              className={drawingMode === 'marker' ? 'active' : ''}
+              className={`icon-btn${drawingMode === 'marker' ? ' active' : ''}`}
               onClick={() => toggleDrawingMode('marker')}
               disabled={!!selectedObject}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                height: '32px',
-                padding: '4px 10px',
-                fontSize: '13px',
-                borderRadius: '4px',
-                fontWeight: 500,
-                lineHeight: 1
-              }}
+              title="Малювати маркер"
+              style={{ marginLeft: '5px', marginRight: '5px', paddingLeft: '5px', paddingRight: '5px' }}
             >
               <span className="material-icons" style={{ fontSize: 18, marginRight: 4, verticalAlign: 'middle' }}>place</span>
               <span style={{ verticalAlign: 'middle' }}>Маркер</span>
             </button>
             <button 
-              className={drawingMode === 'polyline' ? 'active' : ''}
+              className={`icon-btn${drawingMode === 'polyline' ? ' active' : ''}`}
               onClick={() => toggleDrawingMode('polyline')}
               disabled={!!selectedObject}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                height: '32px',
-                padding: '4px 10px',
-                fontSize: '13px',
-                borderRadius: '4px',
-                fontWeight: 500,
-                lineHeight: 1
-              }}
+              title="Малювати лінію"
+              style={{ marginLeft: '5px', marginRight: '5px', paddingLeft: '5px', paddingRight: '5px' }}
             >
               <span className="material-icons" style={{ fontSize: 18, marginRight: 4, verticalAlign: 'middle' }}>timeline</span>
               <span style={{ verticalAlign: 'middle' }}>Лінія</span>
@@ -811,6 +803,17 @@ function App() {
               {imageOverlayCorners.length === 2 && 'Клікніть на мапі третій кут зображення'}
               {imageOverlayCorners.length === 3 && 'Клікніть на мапі четвертий кут зображення'}
             </div>
+          )}
+          {showDeletePolylineDialog?.show && selectedPolyline && selectedPolylineLayerId && (
+            <ConfirmationDialog
+              isOpen={true}
+              message={showDeletePolylineDialog.message}
+              onConfirm={() => {
+                handleDeleteSelectedPolyline();
+                setShowDeletePolylineDialog(null);
+              }}
+              onCancel={() => setShowDeletePolylineDialog(null)}
+            />
           )}
           {/* Діалог додавання мапи (зображення) */}
           <ImageOverlayDialog

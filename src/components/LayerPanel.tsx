@@ -52,14 +52,38 @@ const LayerPanel: React.FC<LayerPanelProps> = ({
   return (
     <div className={`layer-panel ${className || ''}`}>
       <h2>Шари</h2>
-      <div className="panel-controls">
-        <button onClick={onAddLayer}>Додати шар</button>
-        <button onClick={onAddImageOverlay}>Додати мапу</button>
-        <button onClick={onExport}>Експорт</button>
-        <label>
-          Імпорт
-          <input type="file" accept=".json" onChange={onImport} style={{ display: 'none' }} />
-        </label>
+      <div style={{ display: 'flex', alignItems: 'center', height: '64px', gap: '16px' }}>
+        <div className="panel-controls" style={{ marginTop: 0, flex: 1, justifyContent: 'center', gap: '16px' }}>
+          <button
+            className="icon-btn"
+            onClick={onAddLayer}
+            title="Додати шар"
+          >
+            <span className="material-icons">add</span>
+          </button>
+          <button
+            className="icon-btn"
+            onClick={onAddImageOverlay}
+            title="Додати мапу/зображення"
+          >
+            <span className="material-icons">map</span>
+          </button>
+          <button
+            className="icon-btn"
+            onClick={onExport}
+            title="Експорт"
+          >
+            <span className="material-icons">file_upload</span>
+          </button>
+          <label
+            className="icon-btn"
+            title="Імпорт"
+            style={{ justifyContent: 'center' }}
+          >
+            <span className="material-icons">file_download</span>
+            <input type="file" accept=".json" style={{ display: 'none' }} onChange={onImport} />
+          </label>
+        </div>
       </div>
       <div className="layer-list">
         {layers.map(layer => (
@@ -68,12 +92,41 @@ const LayerPanel: React.FC<LayerPanelProps> = ({
             className={`layer-item ${layer.id === activeLayerId ? 'active' : ''} ${!layer.visible ? 'layer-hidden' : ''}`}
             onClick={() => onSetActiveLayer(layer.id)}
           >
-            <input
-              type="text"
-              value={layer.name}
-              onChange={(e) => onUpdateLayer(layer.id, { name: e.target.value })}
-              onClick={(e) => e.stopPropagation()}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              <input
+                type="text"
+                value={layer.name}
+                onChange={(e) => onUpdateLayer(layer.id, { name: e.target.value })}
+                onClick={(e) => e.stopPropagation()}
+                style={{ flex: 1, minWidth: 0 }}
+              />
+              <span style={{ display: 'inline-flex', gap: 4, marginLeft: 8 }}>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUpdateLayer(layer.id, { visible: !layer.visible });
+                  }}
+                  title={layer.visible ? 'Приховати' : 'Показати'}
+                  style={{ padding: 2, minWidth: 0, width: 28, height: 28, background: 'none', border: 'none', boxShadow: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                >
+                  <span className="material-icons" style={{ fontSize: 20, color: '#1976d2', transition: 'color 0.15s' }}>
+                    {layer.visible ? 'visibility_off' : 'visibility'}
+                  </span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteLayer(layer.id);
+                  }}
+                  title="Видалити"
+                  style={{ padding: 2, minWidth: 0, width: 28, height: 28, background: 'none', border: 'none', boxShadow: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                >
+                  <span className="material-icons" style={{ fontSize: 20, color: '#d32f2f', transition: 'color 0.15s' }}>
+                    delete
+                  </span>
+                </button>
+              </span>
+            </div>
             <select
               className="layer-maptype-select"
               value={layer.mapType}
@@ -150,25 +203,6 @@ const LayerPanel: React.FC<LayerPanelProps> = ({
                 ))}
               </div>
             )}
-            <div className="layer-item-controls">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onUpdateLayer(layer.id, { visible: !layer.visible });
-                }}
-              >
-                {layer.visible ? 'Приховати' : 'Показати'}
-              </button>
-              <button
-                className="delete-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteLayer(layer.id);
-                }}
-              >
-                Видалити
-              </button>
-            </div>
             <input
               type="range"
               min="0"
