@@ -41,10 +41,17 @@ const PolylineEditor: React.FC<PolylineEditorProps> = ({ selectedPolyline, onUpd
       .map(line => {
         const [lat, lng] = line.split(',').map(Number);
         return [lat, lng] as [number, number];
-      })
-      .filter(([lat, lng]) => !isNaN(lat) && !isNaN(lng));
-    if (coords.length < 2) {
-      alert('Мінімум дві координати!');
+      });
+    // Додаткова перевірка валідності
+    const validCoords = coords.filter(
+      ([lat, lng]) => Array.isArray([lat, lng]) && [lat, lng].length === 2 && typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng)
+    );
+    if (validCoords.length < 2) {
+      alert('Мінімум дві валідні координати!');
+      return;
+    }
+    if (validCoords.length !== coords.length) {
+      alert('Деякі координати невалідні. Перевірте формат: lat,lng у кожному рядку.');
       return;
     }
     onUpdate({
@@ -53,7 +60,7 @@ const PolylineEditor: React.FC<PolylineEditorProps> = ({ selectedPolyline, onUpd
       color,
       weight,
       dashArray,
-      coordinates: coords,
+      coordinates: validCoords,
       imageUrl,
     });
   };

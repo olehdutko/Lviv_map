@@ -25,22 +25,42 @@ const PolylinesLayer: React.FC<PolylinesLayerProps> = ({
         <React.Fragment key={layer.id}>
           {layer.polylines.map(polyline => {
             const isSelected = selectedPolyline && polyline.id === selectedPolyline.id;
+            const isValidPolyline = Array.isArray(polyline.coordinates) && polyline.coordinates.length >= 2 && polyline.coordinates.every(
+              c => Array.isArray(c) && c.length === 2 && typeof c[0] === 'number' && typeof c[1] === 'number' && !isNaN(c[0]) && !isNaN(c[1])
+            );
+            if (!isValidPolyline) {
+              return null;
+            }
+            const leafletCoords = polyline.coordinates.map(([lat, lng]) => ({ lat, lng }));
+            const rawCoords = polyline.coordinates;
+            if (isSelected) {
+              // ... existing code ...
+            }
             return (
               <React.Fragment key={polyline.id}>
-                {isSelected && polyline.coordinates.length >= 2 && (
-                  <Rectangle
-                    className="selection-rectangle"
-                    bounds={L.polyline(polyline.coordinates).getBounds()}
-                    pathOptions={{
-                      color: '#1976d2',      // blue border
-                      weight: 1,              // 1px thick
-                      fillColor: polyline.color || layer.drawingSettings.polylineColor,
-                      fillOpacity: 0.15,      // 15% opacity
-                    }}
-                  />
-                )}
+                {isSelected && (() => {
+                  const sw = L.latLngBounds(rawCoords).getSouthWest();
+                  const ne = L.latLngBounds(rawCoords).getNorthEast();
+                  const boundsArr: [number, number, number?][] = [
+                    [sw.lat, sw.lng],
+                    [ne.lat, ne.lng]
+                  ];
+                  if (boundsArr.length !== 2) return null;
+                  return (
+                    <Rectangle
+                      className="selection-rectangle"
+                      bounds={boundsArr}
+                      pathOptions={{
+                        color: '#1976d2',      // blue border
+                        weight: 1,              // 1px thick
+                        fillColor: polyline.color || layer.drawingSettings.polylineColor,
+                        fillOpacity: 0.15,      // 15% opacity
+                      }}
+                    />
+                  );
+                })()}
                 <Polyline
-                  positions={polyline.coordinates}
+                  positions={leafletCoords}
                   pathOptions={{
                     color: polyline.color || layer.drawingSettings.polylineColor,
                     weight: polyline.weight || layer.drawingSettings.polylineWeight,
@@ -70,7 +90,7 @@ const PolylinesLayer: React.FC<PolylinesLayerProps> = ({
       {/* Render the polyline currently being drawn */}
       {currentPolylinePoints && currentPolylinePoints.length > 0 && (
         <Polyline
-          positions={currentPolylinePoints}
+          positions={currentPolylinePoints.map(([lat, lng]) => ({ lat, lng }))}
           pathOptions={{
             color: 'grey',
             weight: 3,

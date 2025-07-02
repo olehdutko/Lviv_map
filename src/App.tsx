@@ -584,42 +584,69 @@ function App() {
         >
           <div className="drawing-toolbar">
             <button 
-              className={drawingMode === 'marker' ? 'active' : ''}
-              onClick={() => toggleDrawingMode('marker')}
-              disabled={!!selectedObject}
-            >
-              Малювати маркер
-            </button>
-            <button 
-              className={drawingMode === 'polyline' ? 'active' : ''}
-              onClick={() => toggleDrawingMode('polyline')}
-              disabled={!!selectedObject}
-            >
-              Малювати лінію
-            </button>
-            
-            <button 
               onClick={handleAddIIIFOverlay}
               style={{
                 backgroundColor: '#1976d2',
                 color: 'white',
                 border: 'none',
-                padding: '8px 16px',
+                padding: '4px 10px',
                 borderRadius: '4px',
                 cursor: 'pointer',
-                fontSize: '14px',
+                fontSize: '13px',
                 fontWeight: '500',
-                transition: 'background-color 0.2s'
+                transition: 'background-color 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                height: '32px',
+                lineHeight: 1
               }}
               onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1565c0'}
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#1976d2'}
               title="Додати IIIF мапу (IIIF Image API або manifest)"
             >
-              Додати IIIF мапу
+              <span className="material-icons" style={{ fontSize: 18, marginRight: 4, verticalAlign: 'middle' }}>image</span>
+              <span style={{ verticalAlign: 'middle' }}>IIIF мапа</span>
+            </button>
+            
+            <button 
+              className={drawingMode === 'marker' ? 'active' : ''}
+              onClick={() => toggleDrawingMode('marker')}
+              disabled={!!selectedObject}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                height: '32px',
+                padding: '4px 10px',
+                fontSize: '13px',
+                borderRadius: '4px',
+                fontWeight: 500,
+                lineHeight: 1
+              }}
+            >
+              <span className="material-icons" style={{ fontSize: 18, marginRight: 4, verticalAlign: 'middle' }}>place</span>
+              <span style={{ verticalAlign: 'middle' }}>Маркер</span>
+            </button>
+            <button 
+              className={drawingMode === 'polyline' ? 'active' : ''}
+              onClick={() => toggleDrawingMode('polyline')}
+              disabled={!!selectedObject}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                height: '32px',
+                padding: '4px 10px',
+                fontSize: '13px',
+                borderRadius: '4px',
+                fontWeight: 500,
+                lineHeight: 1
+              }}
+            >
+              <span className="material-icons" style={{ fontSize: 18, marginRight: 4, verticalAlign: 'middle' }}>timeline</span>
+              <span style={{ verticalAlign: 'middle' }}>Лінія</span>
             </button>
             
             {/* GeoSearch input */}
-            <div className="geo-search-container" style={{ position: 'relative', marginLeft: 'auto' }}>
+            <div className="geo-search-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', position: 'relative' }}>
               <input
                 type="text"
                 placeholder="Пошук по географічних назвах"
