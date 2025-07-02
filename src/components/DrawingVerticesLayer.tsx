@@ -18,8 +18,8 @@ const DrawingVerticesLayer: React.FC<DrawingVerticesLayerProps> = ({ points, onD
         <CircleMarker
           key={index}
           center={point}
-          radius={6}
-          pathOptions={{ color: '#dc3545', fillColor: '#ff4d4d', fillOpacity: 1, weight: 2 }}
+          radius={3}
+          pathOptions={{ color: '#dc3545', fillColor: '#ff4d4d', fillOpacity: 1, weight: 1 }}
           eventHandlers={{
             click: (e) => {
               L.DomEvent.stopPropagation(e.originalEvent);

@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Tooltip, useMapEvents, useMap, Rectangle, ImageOverlay, CircleMarker } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Tooltip, useMapEvents, useMap, Rectangle, ImageOverlay, CircleMarker, Polygon } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Layer, MapMarker, MapPolyline, MapImageOverlay } from '../types';
+import { Layer, MapMarker, MapPolyline, MapImageOverlay, MapPolygon } from '../types';
 import MarkersLayer from './MarkersLayer';
 import PolylinesLayer from './PolylinesLayer';
 import DrawingVerticesLayer from './DrawingVerticesLayer';
@@ -59,6 +59,11 @@ interface MapComponentProps {
     carto: string;
   };
   onMapRef?: (ref: any) => void;
+  currentPolygonPoints: [number, number][];
+  onAddPolygonPoint: (point: [number, number]) => void;
+  onDeletePolygonPoint: (index: number) => void;
+  onSetSelectedPolygon: (polygon: MapPolygon | null, layerId?: string) => void;
+  selectedPolygon: MapPolygon | null;
 }
 
 // Internal component to handle map events, as it must be a child of MapContainer
@@ -66,9 +71,10 @@ const MapEventsHandler: React.FC<{
   drawingMode: 'marker' | 'polygon' | 'polyline' | 'none';
   onMarkerAdd: (latlng: L.LatLng) => void;
   onPolylinePointAdd: (latlng: L.LatLng) => void;
+  onPolygonPointAdd: (latlng: L.LatLng) => void;
   imageOverlayMode: boolean;
   onMapClickForImageOverlay: (latlng: [number, number]) => void;
-}> = ({ drawingMode, onMarkerAdd, onPolylinePointAdd, imageOverlayMode, onMapClickForImageOverlay }) => {
+}> = ({ drawingMode, onMarkerAdd, onPolylinePointAdd, onPolygonPointAdd, imageOverlayMode, onMapClickForImageOverlay }) => {
   useMapEvents({
     click(e) {
       if (imageOverlayMode) {
@@ -77,6 +83,8 @@ const MapEventsHandler: React.FC<{
         onMarkerAdd(e.latlng);
       } else if (drawingMode === 'polyline') {
         onPolylinePointAdd(e.latlng);
+      } else if (drawingMode === 'polygon') {
+        onPolygonPointAdd(e.latlng);
       }
     },
   });
@@ -379,6 +387,11 @@ const MapComponent: React.FC<MapComponentProps & { onShowSnackbar?: (msg: string
   mapApiKeys,
   onShowSnackbar,
   onMapRef,
+  currentPolygonPoints,
+  onAddPolygonPoint,
+  onDeletePolygonPoint,
+  onSetSelectedPolygon,
+  selectedPolygon,
 }) => {
   const lvivPosition: [number, number] = [49.8397, 24.0297];
   const mapRef = useRef<L.Map | null>(null);
@@ -647,6 +660,7 @@ console.log('body.id', manifest.items?.[0]?.items?.[0]?.items?.[0]?.body?.id);
         drawingMode={drawingMode} 
         onMarkerAdd={handleAddMarker}
         onPolylinePointAdd={handleAddPolylinePoint} 
+        onPolygonPointAdd={(latlng) => onAddPolygonPoint([latlng.lat, latlng.lng])}
         imageOverlayMode={imageOverlayMode}
         onMapClickForImageOverlay={onMapClickForImageOverlay}
       />
@@ -729,6 +743,52 @@ console.log('body.id', manifest.items?.[0]?.items?.[0]?.items?.[0]?.body?.id);
           );
         })}
 
+      {/* Рендер полігону під час малювання */}
+      {drawingMode === 'polygon' && currentPolygonPoints.length > 0 && (
+        <>
+          <Polygon
+            positions={currentPolygonPoints}
+            pathOptions={{ color: 'grey', fillColor: 'grey', fillOpacity: 0.3, weight: 2, dashArray: '5, 5' }}
+          />
+          <DrawingVerticesLayer
+            points={currentPolygonPoints}
+            onDeletePoint={onDeletePolygonPoint}
+          />
+        </>
+      )}
+
+      {/* Рендер усіх полігонів з шарів */}
+      {layers.filter(layer => layer.visible).flatMap(layer =>
+        (layer.polygons || []).map(polygon => {
+          const isSelected = selectedPolygon && polygon.id === selectedPolygon.id;
+          return (
+            <Polygon
+              key={polygon.id}
+              positions={polygon.coordinates}
+              pathOptions={{
+                color: isSelected ? '#1976d2' : (polygon.color || layer.drawingSettings.polygonColor),
+                fillColor: polygon.fillColor || layer.drawingSettings.polygonFillColor,
+                fillOpacity: typeof polygon.opacity === 'number' ? polygon.opacity : 0.3,
+                weight: isSelected ? 1 : 2,
+                opacity: isSelected ? 1 : undefined,
+              }}
+              eventHandlers={{
+                click: () => onSetSelectedPolygon(polygon, layer.id)
+              }}
+            >
+              <Tooltip sticky>
+                <div className="tooltip-content">
+                  <h4>{polygon.title || 'Полігон'}</h4>
+                  {polygon.description && (
+                    <div dangerouslySetInnerHTML={{ __html: polygon.description }} />
+                  )}
+                  {polygon.imageUrl && <img src={polygon.imageUrl} alt={polygon.title || 'Зображення полігону'} className="tooltip-image" />}
+                </div>
+              </Tooltip>
+            </Polygon>
+          );
+        })
+      )}
 
     </MapContainer>
   );

@@ -6,7 +6,8 @@ import PolylineEditor from './components/PolylineEditor';
 import Snackbar from './components/Snackbar';
 import ConfirmationDialog from './components/ConfirmationDialog';
 import ImageOverlayDialog from './components/ImageOverlayDialog';
-import { Layer, MapMarker, MapPolyline } from './types';
+import PolygonEditor from './components/PolygonEditor';
+import { Layer, MapMarker, MapPolyline, MapPolygon } from './types';
 import './index.css';
 
 // Define DrawingMode type
@@ -52,6 +53,7 @@ function App() {
   const [selectedPolyline, setSelectedPolyline] = useState<MapPolyline | null>(null);
   const [selectedPolylineLayerId, setSelectedPolylineLayerId] = useState<string | null>(null);
   const [currentPolylinePoints, setCurrentPolylinePoints] = useState<[number, number][]>([]);
+  const [currentPolygonPoints, setCurrentPolygonPoints] = useState<[number, number][]>([]);
   const [snackbarMessage, setSnackbarMessage] = useState<string>('');
   const [isLayerPanelVisible, setIsLayerPanelVisible] = useState(true);
   const [layerToDelete, setLayerToDelete] = useState<string | null>(null);
@@ -108,9 +110,15 @@ function App() {
     }
   };
 
-  // crosshair cursor when selecting overlay corners або малюванні маркера/лінії
+  // useState оголошення для полігонів (перенесено на початок)
+  const [isPolygonEditorOpen, setPolygonEditorOpen] = useState(false);
+  const [selectedPolygon, setSelectedPolygon] = useState<MapPolygon | null>(null);
+  const [selectedPolygonLayerId, setSelectedPolygonLayerId] = useState<string | null>(null);
+  const [pendingPolygon, setPendingPolygon] = useState<null | { coordinates: [number, number][] }>(null);
+
+  // crosshair cursor when selecting overlay corners або малюванні маркера/лінії/полігона
   useEffect(() => {
-    if (drawingMode === 'marker' || drawingMode === 'polyline' || pendingImageOverlay) {
+    if (drawingMode === 'marker' || drawingMode === 'polyline' || drawingMode === 'polygon' || pendingImageOverlay) {
       document.body.classList.add('osr-crosshair');
     } else {
       document.body.classList.remove('osr-crosshair');
@@ -119,6 +127,17 @@ function App() {
       document.body.classList.remove('osr-crosshair');
     };
   }, [drawingMode, pendingImageOverlay]);
+
+  // Відкривати PolygonEditor одразу при першій точці полігону
+  useEffect(() => {
+    if (drawingMode === 'polygon' && currentPolygonPoints.length === 1 && !isPolygonEditorOpen) {
+      setPolygonEditorOpen(true);
+    }
+    // Якщо малювання скасовано, закриваємо редактор
+    if (drawingMode !== 'polygon' && isPolygonEditorOpen && !selectedPolygon) {
+      setPolygonEditorOpen(false);
+    }
+  }, [drawingMode, currentPolygonPoints, isPolygonEditorOpen, selectedPolygon]);
 
   const handleAddLayer = () => {
     const newLayer = createNewLayer();
@@ -227,12 +246,15 @@ function App() {
 
   const toggleDrawingMode = (mode: DrawingMode) => {
     if (mode === 'polyline' && currentPolylinePoints.length > 0) {
-      // Don't toggle off if currently drawing
+      return;
+    }
+    if (mode === 'polygon' && currentPolygonPoints.length > 0) {
       return;
     }
     setDrawingMode(prev => (prev === mode ? 'none' : mode));
-    setSelectedObject(null); // Deselect object when changing mode
-    setCurrentPolylinePoints([]); // Reset polyline points
+    setSelectedObject(null);
+    setCurrentPolylinePoints([]);
+    setCurrentPolygonPoints([]);
   };
 
   const handleUpdateDrawingSettings = (updates: Partial<Layer['drawingSettings']>) => {
@@ -569,6 +591,98 @@ function App() {
     }
   };
 
+  const handleAddPolygonPoint = (point: [number, number]) => {
+    setCurrentPolygonPoints(prev => [...prev, point]);
+  };
+
+  const handleDeletePolygonPoint = (indexToDelete: number) => {
+    setCurrentPolygonPoints(prev => prev.filter((_, index) => index !== indexToDelete));
+  };
+
+  const handleFinishPolygon = () => {
+    if (currentPolygonPoints.length < 3) {
+      setSnackbarMessage('Полігон має містити мінімум 3 точки');
+      return;
+    }
+    setPendingPolygon({ coordinates: currentPolygonPoints });
+    setPolygonEditorOpen(true);
+  };
+
+  const handlePolygonEditorSave = (updates: Partial<MapPolygon>) => {
+    // Якщо редагування існуючого полігону
+    if (selectedPolygon && selectedPolygonLayerId) {
+      const layer = layers.find(l => l.id === selectedPolygonLayerId);
+      if (!layer) return;
+      const updatedPolygons = layer.polygons.map(p =>
+        p.id === selectedPolygon.id ? { ...p, ...updates } : p
+      );
+      handleUpdateLayer(selectedPolygonLayerId, { polygons: updatedPolygons });
+      setSelectedPolygon(null);
+      setSelectedPolygonLayerId(null);
+      setPolygonEditorOpen(false);
+      setSnackbarMessage('Полігон оновлено');
+      return;
+    }
+    // Додаємо новий полігон (flow малювання)
+    const activeLayer = layers.find(l => l.id === activeLayerId);
+    if (!activeLayer) return;
+    const coords = updates.coordinates && updates.coordinates.length >= 3 ? updates.coordinates : currentPolygonPoints;
+    if (!coords || coords.length < 3) {
+      setSnackbarMessage('Полігон має містити мінімум 3 точки');
+      return;
+    }
+    const newPolygon = {
+      id: `polygon-${Date.now()}`,
+      coordinates: coords,
+      color: updates.color || activeLayer.drawingSettings.polygonColor,
+      fillColor: updates.fillColor || activeLayer.drawingSettings.polygonFillColor,
+      opacity: typeof updates.opacity === 'number' ? updates.opacity : 0.3,
+      title: updates.title || `Полігон ${new Date().toLocaleTimeString()}`,
+      description: updates.description || '',
+    };
+    handleUpdateLayer(activeLayerId, {
+      polygons: [...activeLayer.polygons, newPolygon],
+    });
+    setCurrentPolygonPoints([]);
+    setDrawingMode('none');
+    setPolygonEditorOpen(false);
+    setPendingPolygon(null);
+    setSnackbarMessage('Полігон додано');
+  };
+
+  const handlePolygonEditorDelete = () => {
+    if (selectedPolygon && selectedPolygonLayerId) {
+      const layer = layers.find(l => l.id === selectedPolygonLayerId);
+      if (!layer) return;
+      const updatedPolygons = layer.polygons.filter(p => p.id !== selectedPolygon.id);
+      handleUpdateLayer(selectedPolygonLayerId, { polygons: updatedPolygons });
+      setSelectedPolygon(null);
+      setSelectedPolygonLayerId(null);
+      setPolygonEditorOpen(false);
+      setSnackbarMessage('Полігон видалено');
+    } else {
+      setPolygonEditorOpen(false);
+      setPendingPolygon(null);
+      setCurrentPolygonPoints([]);
+      setDrawingMode('none');
+    }
+  };
+
+  const handlePolygonEditorCancel = () => {
+    setPolygonEditorOpen(false);
+    setPendingPolygon(null);
+    setSelectedPolygon(null);
+    setSelectedPolygonLayerId(null);
+    setCurrentPolygonPoints([]);
+    setDrawingMode('none');
+  };
+
+  const handleSetSelectedPolygon = (polygon: MapPolygon | null, layerId?: string) => {
+    setSelectedPolygon(polygon);
+    setSelectedPolygonLayerId(layerId || null);
+    setPolygonEditorOpen(!!polygon);
+  };
+
   return (
     <div style={{ position: 'relative', height: '100vh', overflow: 'hidden' }}>
       <div style={{ display: 'flex', height: '100%' }}>
@@ -635,6 +749,16 @@ function App() {
             >
               <span className="material-icons" style={{ fontSize: 18, marginRight: 4, verticalAlign: 'middle' }}>timeline</span>
               <span style={{ verticalAlign: 'middle' }}>Лінія</span>
+            </button>
+            <button 
+              className={`icon-btn${drawingMode === 'polygon' ? ' active' : ''}`}
+              onClick={() => toggleDrawingMode('polygon')}
+              disabled={!!selectedObject}
+              title="Малювати полігон"
+              style={{ marginLeft: '5px', marginRight: '5px', paddingLeft: '5px', paddingRight: '5px' }}
+            >
+              <span className="material-icons" style={{ fontSize: 18, marginRight: 4, verticalAlign: 'middle' }}>crop_square</span>
+              <span style={{ verticalAlign: 'middle' }}>Полігон</span>
             </button>
             
             {/* GeoSearch input */}
@@ -765,6 +889,11 @@ function App() {
             mapTypes={mapTypes}
             mapApiKeys={mapApiKeys}
             onMapRef={handleMapRef}
+            currentPolygonPoints={currentPolygonPoints}
+            onAddPolygonPoint={handleAddPolygonPoint}
+            onDeletePolygonPoint={handleDeletePolygonPoint}
+            onSetSelectedPolygon={handleSetSelectedPolygon}
+            selectedPolygon={selectedPolygon}
           />
           {selectedObject && !selectedPolyline && 'lat' in selectedObject && 'lng' in selectedObject && (
             <ObjectEditor
@@ -821,6 +950,28 @@ function App() {
             onImageSelected={handleImageOverlaySelected}
             onCancel={handleCancelImageOverlay}
           />
+          {isPolygonEditorOpen && (selectedPolygon || drawingMode === 'polygon') && (
+            <div className="modal-overlay">
+              <div className="modal-content">
+                <PolygonEditor
+                  key={selectedPolygon ? selectedPolygon.id : `drawing-${currentPolygonPoints.length}`}
+                  selectedPolygon={selectedPolygon || {
+                    id: '',
+                    coordinates: currentPolygonPoints,
+                    color: '',
+                    fillColor: '',
+                    opacity: 0.3,
+                    title: '',
+                    description: '',
+                  }}
+                  onUpdate={handlePolygonEditorSave}
+                  onDelete={selectedPolygon ? handlePolygonEditorDelete : handlePolygonEditorCancel}
+                  onClose={handlePolygonEditorCancel}
+                  isDrawing={!selectedPolygon && drawingMode === 'polygon'}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

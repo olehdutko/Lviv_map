@@ -24,6 +24,8 @@ export interface MapPolygon extends MapObject {
   coordinates: [number, number][];
   color?: string;
   fillColor?: string;
+  opacity?: number;
+  imageUrl?: string;
 }
 
 export interface MapPolyline extends MapObject {

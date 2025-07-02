@@ -31,11 +31,8 @@ const PolylinesLayer: React.FC<PolylinesLayerProps> = ({
             if (!isValidPolyline) {
               return null;
             }
-            const leafletCoords = polyline.coordinates.map(([lat, lng]) => ({ lat, lng }));
             const rawCoords = polyline.coordinates;
-            if (isSelected) {
-              // ... existing code ...
-            }
+            const leafletCoords = rawCoords.map(([lat, lng]) => ({ lat, lng }));
             return (
               <React.Fragment key={polyline.id}>
                 {isSelected && (() => {
@@ -51,10 +48,10 @@ const PolylinesLayer: React.FC<PolylinesLayerProps> = ({
                       className="selection-rectangle"
                       bounds={boundsArr}
                       pathOptions={{
-                        color: '#1976d2',      // blue border
-                        weight: 1,              // 1px thick
+                        color: '#1976d2',
+                        weight: 1,
                         fillColor: polyline.color || layer.drawingSettings.polylineColor,
-                        fillOpacity: 0.15,      // 15% opacity
+                        fillOpacity: 0.15,
                       }}
                     />
                   );
@@ -73,11 +70,11 @@ const PolylinesLayer: React.FC<PolylinesLayerProps> = ({
                 >
                   <Tooltip sticky>
                     <div className="tooltip-content">
-                      {polyline.imageUrl && <img src={polyline.imageUrl} alt={polyline.title || 'Зображення лінії'} className="tooltip-image" />}
                       <h4>{polyline.title || 'Лінія'}</h4>
                       {polyline.description && (
                         <div dangerouslySetInnerHTML={{ __html: polyline.description }} />
                       )}
+                      {polyline.imageUrl && <img src={polyline.imageUrl} alt={polyline.title || 'Зображення лінії'} className="tooltip-image" />}
                     </div>
                   </Tooltip>
                 </Polyline>
