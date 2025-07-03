@@ -22,11 +22,11 @@ interface GeoSearchResult {
 }
 
 function App() {
-  const createNewLayer = (): Layer => {
+  const createNewLayer = (isBase = false): Layer => {
     const layerId = `layer-${Date.now()}`;
     return {
       id: layerId,
-      name: `Шар ${new Date().toLocaleTimeString()}`,
+      name: isBase ? 'Базовий шар' : `Шар ${new Date().toLocaleTimeString()}`,
       visible: true,
       opacity: 1,
       markers: [],
@@ -46,7 +46,20 @@ function App() {
     };
   };
 
-  const [layers, setLayers] = useState<Layer[]>([createNewLayer()]);
+  const [layers, setLayers] = useState<Layer[]>(() => {
+    const saved = localStorage.getItem('osr-map-layers');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Перша назва завжди 'Базовий шар'
+          parsed[0].name = 'Базовий шар';
+          return parsed;
+        }
+      } catch {}
+    }
+    return [createNewLayer(true)];
+  });
   const [activeLayerId, setActiveLayerId] = useState<string>(layers[0].id);
   const [drawingMode, setDrawingMode] = useState<DrawingMode>('none');
   const [selectedObject, setSelectedObject] = useState<MapMarker | import('./types').MapImageOverlay | null>(null);
@@ -138,6 +151,11 @@ function App() {
       setPolygonEditorOpen(false);
     }
   }, [drawingMode, currentPolygonPoints, isPolygonEditorOpen, selectedPolygon]);
+
+  // Збереження layers у localStorage при кожній зміні
+  useEffect(() => {
+    localStorage.setItem('osr-map-layers', JSON.stringify(layers));
+  }, [layers]);
 
   const handleAddLayer = () => {
     const newLayer = createNewLayer();
@@ -683,6 +701,14 @@ function App() {
     setPolygonEditorOpen(!!polygon);
   };
 
+  const handleReorderLayers = (newLayers: Layer[]) => {
+    setLayers(newLayers);
+    // Якщо activeLayerId не існує у нових шарах, вибираємо перший
+    if (!newLayers.find(l => l.id === activeLayerId)) {
+      setActiveLayerId(newLayers[0]?.id || '');
+    }
+  };
+
   return (
     <div style={{ position: 'relative', height: '100vh', overflow: 'hidden' }}>
       <div style={{ display: 'flex', height: '100%' }}>
@@ -715,6 +741,8 @@ function App() {
           onExport={handleExport}
           onImport={handleImport}
           onAddImageOverlay={handleAddImageOverlay}
+          baseLayerId={layers[0]?.id}
+          onReorderLayers={handleReorderLayers}
         />
         <div 
           className={`map-wrapper ${drawingMode === 'polyline' ? 'drawing-polyline' : ''}`}

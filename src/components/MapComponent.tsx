@@ -262,12 +262,13 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({ overlay, 
     window.removeEventListener('mouseup', handleMouseUp);
   }
 
-  // Кастомний divIcon для поінта
-  const pointIcon = L.divIcon({
+  // Кастомний divIcon для поінта з курсором
+  const cursors = ['nwse-resize', 'nesw-resize', 'nwse-resize', 'nesw-resize'];
+  const pointIcon = (i: number) => L.divIcon({
     className: '',
-    html: '<div style="width:6px;height:6px;border-radius:50%;background:#ff4d4d;border:1px solid #d32f2f;box-shadow:0 0 1px #333;"></div>',
-    iconSize: [6, 6],
-    iconAnchor: [3, 3],
+    html: `<div style="width:10px;height:10px;border-radius:50%;background:#ff4d4d;border:1px solid #d32f2f;box-shadow:0 0 1px #333;cursor:${cursors[i]}"></div>`,
+    iconSize: [10, 10],
+    iconAnchor: [5, 5],
   });
 
   // index: 0=topLeft, 1=topRight, 2=bottomRight, 3=bottomLeft
@@ -319,10 +320,16 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({ overlay, 
         <Marker
           key={i}
           position={corner}
-          icon={pointIcon}
+          icon={pointIcon(i)}
           draggable={true}
           eventHandlers={{
-            dragend: (e: L.LeafletEvent) => handleDrag(i, e)
+            dragstart: () => {
+              document.body.style.cursor = cursors[i];
+            },
+            dragend: (e) => {
+              handleDrag(i, e);
+              document.body.style.cursor = '';
+            },
           }}
         />
       ))}
