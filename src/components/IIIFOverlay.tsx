@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { useMap } from 'react-leaflet';
-import L from 'leaflet';
 import 'leaflet-iiif';
 
 export default function IIIFOverlay({ url }: { url: string }) {
@@ -48,7 +47,7 @@ export default function IIIFOverlay({ url }: { url: string }) {
       // Додатково: видаляємо всі IIIF tileLayer
       map.eachLayer(layer => {
         // @ts-ignore
-        if (layer instanceof L.TileLayer && layer._url && (layer._url.includes('iiif') || layer._url.includes('wellcomecollection'))) {
+        if (layer instanceof (window as any).L.TileLayer && layer._url && (layer._url.includes('iiif') || layer._url.includes('wellcomecollection'))) {
           map.removeLayer(layer);
         }
       });

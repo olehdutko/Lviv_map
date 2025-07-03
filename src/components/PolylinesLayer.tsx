@@ -1,6 +1,5 @@
 import React from 'react';
 import { Polyline, Tooltip, Rectangle } from 'react-leaflet';
-import L from 'leaflet';
 import { Layer, MapPolyline } from '../types';
 
 interface PolylinesLayerProps {
@@ -36,8 +35,8 @@ const PolylinesLayer: React.FC<PolylinesLayerProps> = ({
             return (
               <React.Fragment key={polyline.id}>
                 {isSelected && (() => {
-                  const sw = L.latLngBounds(rawCoords).getSouthWest();
-                  const ne = L.latLngBounds(rawCoords).getNorthEast();
+                  const sw = (window as any).L.latLngBounds(rawCoords).getSouthWest();
+                  const ne = (window as any).L.latLngBounds(rawCoords).getNorthEast();
                   const boundsArr: [number, number, number?][] = [
                     [sw.lat, sw.lng],
                     [ne.lat, ne.lng]

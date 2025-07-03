@@ -1,6 +1,5 @@
 import React from 'react';
 import { Marker, Tooltip } from 'react-leaflet';
-import L from 'leaflet';
 import { Layer, MapMarker } from '../types';
 
 interface MarkersLayerProps {
@@ -32,7 +31,7 @@ const createColoredMarkerIcon = (color: string, iconName?: string) => {
       </div>
     </div>`;
 
-  return L.divIcon({
+  return (window as any).L.divIcon({
     html: html,
     className: 'custom-marker-icon',
     iconSize: [30, 30],

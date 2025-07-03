@@ -1,6 +1,5 @@
 import React from 'react';
 import { CircleMarker, Tooltip } from 'react-leaflet';
-import L from 'leaflet';
 
 interface DrawingVerticesLayerProps {
   points: [number, number][];
@@ -22,7 +21,7 @@ const DrawingVerticesLayer: React.FC<DrawingVerticesLayerProps> = ({ points, onD
           pathOptions={{ color: '#dc3545', fillColor: '#ff4d4d', fillOpacity: 1, weight: 1 }}
           eventHandlers={{
             click: (e) => {
-              L.DomEvent.stopPropagation(e.originalEvent);
+              (window as any).L.DomEvent.stopPropagation(e.originalEvent);
               onDeletePoint(index);
             },
           }}

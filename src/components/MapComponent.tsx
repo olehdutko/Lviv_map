@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Tooltip, useMapEvents, useMap, Rectangle, ImageOverlay, CircleMarker, Polygon } from 'react-leaflet';
-import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Layer, MapMarker, MapPolyline, MapImageOverlay, MapPolygon } from '../types';
 import MarkersLayer from './MarkersLayer';
@@ -9,8 +8,8 @@ import DrawingVerticesLayer from './DrawingVerticesLayer';
 import IIIFOverlay from './IIIFOverlay';
 
 // Fix for default marker icon
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
+delete ((window as any).L.Icon.Default.prototype as any)._getIconUrl;
+(window as any).L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
@@ -110,8 +109,8 @@ const CompassControl = () => {
 
   useEffect(() => {
     // Check if the plugin is loaded
-    if (L.Control.Compass) {
-      const compass = new L.Control.Compass({
+    if ((window as any).L.Control.Compass) {
+      const compass = new (window as any).L.Control.Compass({
         autoActive: true,
         showDigit: false,
         position: 'topleft'
@@ -264,7 +263,7 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({ overlay, 
 
   // Кастомний divIcon для поінта з курсором
   const cursors = ['nwse-resize', 'nesw-resize', 'nwse-resize', 'nesw-resize'];
-  const pointIcon = (i: number) => L.divIcon({
+  const pointIcon = (i: number) => (window as any).L.divIcon({
     className: '',
     html: `<div style="width:10px;height:10px;border-radius:50%;background:#ff4d4d;border:1px solid #d32f2f;box-shadow:0 0 1px #333;cursor:${cursors[i]}"></div>`,
     iconSize: [10, 10],
@@ -272,8 +271,8 @@ const DraggableImageOverlay: React.FC<DraggableImageOverlayProps> = ({ overlay, 
   });
 
   // index: 0=topLeft, 1=topRight, 2=bottomRight, 3=bottomLeft
-  const handleDrag = (index: number, e: L.LeafletEvent) => {
-    const marker = e.target as L.Marker;
+  const handleDrag = (index: number, e: any) => {
+    const marker = e.target as any;
     const newPos: [number, number] = [marker.getLatLng().lat, marker.getLatLng().lng];
     let newBounds: [[number, number], [number, number]] = [...bounds];
     switch (index) {
@@ -372,6 +371,77 @@ function MapRefSync({ mapRef }: { mapRef: React.MutableRefObject<L.Map | null> }
   return null;
 }
 
+// Додаю компонент для інтеграції leaflet-distortableimage
+const DistortableImageOverlay: React.FC<{
+  overlay: MapImageOverlay;
+  layerId: string;
+  imageOverlays: MapImageOverlay[];
+  onUpdateLayer: (layerId: string, updates: Partial<Layer>) => void;
+  selected: boolean;
+  onSetSelectedObject: (object: MapImageOverlay) => void;
+}> = ({ overlay, layerId, imageOverlays, onUpdateLayer, selected, onSetSelectedObject }) => {
+  const map = useMap();
+  const overlayRef = useRef<any>(null);
+  useEffect(() => {
+    if (!overlay.corners || overlay.corners.length !== 2) return;
+    // Якщо плагін ще не підключився — не створюємо overlay
+    if (!(window as any).L || !(window as any).L.distortableImageOverlay) return;
+    // Якщо overlay вже існує — не створюємо повторно
+    if (overlayRef.current) return;
+    // corners: [[minLat, minLng], [maxLat, maxLng]]
+    const bounds = overlay.corners;
+    // Створюємо DistortableImageOverlay
+    const img = (window as any).L.distortableImageOverlay(overlay.imageUrl, {
+      corners: [
+        [bounds[0][0], bounds[0][1]], // topLeft
+        [bounds[0][0], bounds[1][1]], // topRight
+        [bounds[1][0], bounds[1][1]], // bottomRight
+        [bounds[1][0], bounds[0][1]], // bottomLeft
+      ],
+      opacity: overlay.opacity ?? 1,
+      selected: selected,
+      suppressToolbar: false,
+    }).addTo(map);
+    overlayRef.current = img;
+    // Синхронізуємо зміни
+    img.on('edit', () => {
+      const newCorners = img._corners.map((c: any) => [c.lat, c.lng]);
+      // corners: [[minLat, minLng], [maxLat, maxLng]]
+      const lats = newCorners.map((c: any) => c[0]);
+      const lngs = newCorners.map((c: any) => c[1]);
+      const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+      const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+      onUpdateLayer(layerId, {
+        imageOverlays: imageOverlays.map(o => o.id === overlay.id ? {
+          ...o,
+          corners: [[minLat, minLng], [maxLat, maxLng]],
+        } : o)
+      });
+    });
+    img.on('click', () => onSetSelectedObject(overlay));
+    return () => {
+      if (overlayRef.current) {
+        map.removeLayer(overlayRef.current);
+        overlayRef.current = null;
+      }
+    };
+  }, [map, overlay, imageOverlays, onUpdateLayer, layerId, selected, onSetSelectedObject]);
+  // Оновлюємо opacity
+  useEffect(() => {
+    if (overlayRef.current) overlayRef.current.setOpacity(overlay.opacity ?? 1);
+  }, [overlay.opacity]);
+  // Оновлюємо selected
+  useEffect(() => {
+    if (overlayRef.current) {
+      if (selected) overlayRef.current.editing.enable();
+      else overlayRef.current.editing.disable();
+    }
+  }, [selected]);
+  // Якщо плагін ще не підключився — не рендеримо нічого
+  if (!(window as any).L || !(window as any).L.distortableImageOverlay) return null;
+  return null;
+};
+
 const MapComponent: React.FC<MapComponentProps & { onShowSnackbar?: (msg: string) => void }> = ({ 
   layers, 
   activeLayerId, 
@@ -401,7 +471,7 @@ const MapComponent: React.FC<MapComponentProps & { onShowSnackbar?: (msg: string
   selectedPolygon,
 }) => {
   const lvivPosition: [number, number] = [49.8397, 24.0297];
-  const mapRef = useRef<L.Map | null>(null);
+  const mapRef = useRef<any>(null);
   const [iiifOverlays, setIiifOverlays] = React.useState<{id: string, url: string, visible?: boolean}[]>([]);
   const [showBasemap, setShowBasemap] = useState(true);
 
@@ -723,7 +793,7 @@ console.log('body.id', manifest.items?.[0]?.items?.[0]?.items?.[0]?.body?.id);
           .map(overlay => {
             if (!overlay.corners || overlay.corners.length !== 2 || overlay.visible === false) return null;
             return (
-              <DraggableImageOverlay
+              <DistortableImageOverlay
                 key={overlay.id}
                 overlay={overlay}
                 layerId={layer.id}
